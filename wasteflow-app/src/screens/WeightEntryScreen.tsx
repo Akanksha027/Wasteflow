@@ -119,6 +119,7 @@ export default function WeightEntryScreen() {
         totalKg,
         remarks: remarks.trim() || undefined,
         status: 'collected',
+        isOverride,
       });
 
       if (!eventId) {

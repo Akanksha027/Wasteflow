@@ -2,7 +2,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -18,24 +17,26 @@ import { Colors, Typography, Spacing, Radius } from '../theme';
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { signIn, loading } = useAuth();
+  const { signIn, forgotPassword, signingIn } = useAuth();
   const navigation = useNavigation<any>();
 
   async function handleLogin() {
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password.');
       return;
     }
     await signIn(email, password);
   }
 
+  async function handleForgot() {
+    await forgotPassword(email);
+  }
+
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
+    <KeyboardAvoidingView
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={styles.content}>
-        {/* Header */}
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
@@ -48,7 +49,6 @@ export default function LoginScreen() {
           <Text style={styles.subtitle}>Log in to your driver account</Text>
         </View>
 
-        {/* Form */}
         <View style={styles.form}>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Email Address</Text>
@@ -61,7 +61,7 @@ export default function LoginScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
-              editable={!loading}
+              editable={!signingIn}
             />
           </View>
 
@@ -74,28 +74,30 @@ export default function LoginScreen() {
               value={password}
               onChangeText={setPassword}
               secureTextEntry
-              editable={!loading}
+              editable={!signingIn}
             />
           </View>
-          
-          <TouchableOpacity style={styles.forgotBtn}>
+
+          <TouchableOpacity style={styles.forgotBtn} onPress={handleForgot} disabled={signingIn}>
             <Text style={styles.forgotText}>Forgot password?</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Actions */}
         <View style={styles.actions}>
           <TouchableOpacity
-            style={[styles.loginBtn, loading && styles.loginBtnDisabled]}
+            style={[styles.loginBtn, signingIn && styles.loginBtnDisabled]}
             onPress={handleLogin}
-            disabled={loading}
+            disabled={signingIn}
           >
-            {loading ? (
+            {signingIn ? (
               <ActivityIndicator color={Colors.black} />
             ) : (
               <Text style={styles.loginBtnText}>Log In</Text>
             )}
           </TouchableOpacity>
+          <Text style={styles.hint}>
+            Accounts are created by admins in WasteFlow ERP. Drivers cannot self-register here.
+          </Text>
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -204,5 +206,12 @@ const styles = StyleSheet.create({
     color: Colors.black,
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.bold,
+  },
+  hint: {
+    color: Colors.textTertiary,
+    fontSize: Typography.fontSize.xs,
+    textAlign: 'center',
+    marginTop: Spacing.base,
+    lineHeight: 18,
   },
 });

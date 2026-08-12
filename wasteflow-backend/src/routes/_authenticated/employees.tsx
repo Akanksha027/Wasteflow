@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth, ROLE_LABELS, type AppRole } from "@/hooks/useAuth";
 import { useSaveRow, useDeleteRow, qk } from "@/lib/api";
 import { formatDate, kg, downloadCsv, daysAgoISO } from "@/lib/format";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/employees")({
   head: () => ({
@@ -49,6 +50,7 @@ const empty = {
   status: "active",
   assigned_route_id: "",
   assigned_vehicle_id: "",
+  auth_email: "",
   notes: "",
 };
 
@@ -104,8 +106,25 @@ function EmployeesPage() {
 
   const grouped = useMemo(() => employees.data ?? [], [employees.data]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    let userId: string | null = editing?.user_id ?? null;
+    const authEmail = (form["auth_email"] ?? "").trim().toLowerCase();
+    if (authEmail) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id")
+        .ilike("email", authEmail)
+        .maybeSingle();
+      if (!profile?.id) {
+        toast.error("No auth profile found for that email. Have the user sign up on /auth first.");
+        return;
+      }
+      userId = profile.id;
+    } else if (form["auth_email"] === "") {
+      userId = null;
+    }
+
     save.mutate(
       {
         id: editing?.id,
@@ -121,6 +140,7 @@ function EmployeesPage() {
           status: form["status"],
           assigned_route_id: form["assigned_route_id"] || null,
           assigned_vehicle_id: form["assigned_vehicle_id"] || null,
+          user_id: userId,
           notes: form["notes"] || null,
         },
       },
@@ -231,13 +251,23 @@ function EmployeesPage() {
                             variant="ghost"
                             size="icon"
                             aria-label="Edit employee"
-                            onClick={() => {
+                            onClick={async () => {
                               setEditing(e);
+                              let authEmail = "";
+                              if (e.user_id) {
+                                const { data: profile } = await supabase
+                                  .from("profiles")
+                                  .select("email")
+                                  .eq("id", e.user_id)
+                                  .maybeSingle();
+                                authEmail = profile?.email ?? "";
+                              }
                               setForm({
                                 ...empty,
                                 ...Object.fromEntries(
                                   Object.keys(empty).map((k) => [k, e[k] == null ? "" : String(e[k])]),
                                 ),
+                                auth_email: authEmail,
                               });
                               setOpen(true);
                             }}
@@ -358,6 +388,19 @@ function EmployeesPage() {
                   <SelectItem value="on_leave">On leave</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="auth_email">Link auth account (email)</Label>
+              <Input
+                id="auth_email"
+                type="email"
+                placeholder="driver@city.gov — must already exist in /auth"
+                value={form["auth_email"] ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, auth_email: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Links this employee to a WasteFlow login so the Driver App can start trips for them.
+              </p>
             </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="emp-notes">Documents / notes</Label>

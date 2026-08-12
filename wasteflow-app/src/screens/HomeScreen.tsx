@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -11,11 +12,11 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
-import { getAllActiveRoutes, getRouteStopCount, getTodayTrip, startTrip } from '../api';
+import { getDriverRoutes, getRouteStopCount, getTodayTrip, getVehicle, startTrip } from '../api';
 import { getCurrentLocation } from '../services/location';
 import RouteCard from '../components/RouteCard';
 import OfflineBanner from '../components/OfflineBanner';
-import { CollectionTrip, Route } from '../types';
+import { CollectionTrip, Route, Vehicle } from '../types';
 import { Colors, Typography, Spacing, Radius } from '../theme';
 
 interface RouteData {
@@ -28,32 +29,42 @@ export default function HomeScreen() {
   const navigation = useNavigation<any>();
   const { employee } = useAuth();
   const [routeData, setRouteData] = useState<RouteData[]>([]);
+  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [syncingRouteId, setSyncingRouteId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
-    try {
-      const routes = await getAllActiveRoutes();
-      const relevant = employee?.assigned_route_id 
-        ? routes.filter(r => r.id === employee.assigned_route_id) 
-        : routes;
+    if (!employee?.id) {
+      setRouteData([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
 
-      const fullData = await Promise.all(
-        relevant.map(async (route) => {
-          const stopCount = await getRouteStopCount(route.id);
-          const trip = await getTodayTrip(route.id);
-          return { route, stopCount, trip };
-        })
-      );
-      
-      // Sort so active trip is at the top
+    try {
+      const routes = await getDriverRoutes(employee.id);
+      const vehiclePromise = employee.assigned_vehicle_id
+        ? getVehicle(employee.assigned_vehicle_id)
+        : Promise.resolve(null);
+
+      const [veh, fullData] = await Promise.all([
+        vehiclePromise,
+        Promise.all(
+          routes.map(async (route) => {
+            const stopCount = await getRouteStopCount(route.id);
+            const trip = await getTodayTrip(route.id, employee.id);
+            return { route, stopCount, trip };
+          }),
+        ),
+      ]);
+
+      setVehicle(veh);
       fullData.sort((a, b) => {
         if (a.trip?.status === 'in_progress') return -1;
         if (b.trip?.status === 'in_progress') return 1;
         return 0;
       });
-
       setRouteData(fullData);
     } finally {
       setLoading(false);
@@ -66,68 +77,80 @@ export default function HomeScreen() {
   }, [loadData]);
 
   async function handleRoutePress(data: RouteData) {
-    if (data.trip) {
-      if (data.trip.status === 'in_progress') {
-        navigation.navigate('StopList', {
-          route: data.route,
-          trip: data.trip,
-          employeeId: employee?.id,
-          vehicleId: null,
-        });
-      }
+    if (!employee?.id) {
+      Alert.alert('Missing profile', 'No employee record linked to this driver account.');
+      return;
+    }
+
+    if (data.trip?.status === 'in_progress') {
+      navigation.navigate('StopList', {
+        route: data.route,
+        trip: data.trip,
+        employeeId: employee.id,
+        vehicleId: data.trip.vehicle_id ?? employee.assigned_vehicle_id ?? vehicle?.id ?? null,
+      });
       return;
     }
 
     setSyncingRouteId(data.route.id);
     try {
       const loc = await getCurrentLocation();
-      const tripId = await startTrip({
-        routeId: data.route.id,
-        vehicleId: null,
-        driverId: employee?.id,
+      const trip = await startTrip({
+        route_id: data.route.id,
+        vehicle_id: employee.assigned_vehicle_id ?? vehicle?.id ?? null,
+        driver_id: employee.id,
+        start_km: vehicle?.odometer,
         start_lat: loc?.latitude,
         start_lng: loc?.longitude,
       });
 
-      if (tripId) {
-        await loadData();
+      if (!trip) {
+        Alert.alert('Could not start trip', 'Check your connection and try again.');
+        return;
       }
+
+      navigation.navigate('StopList', {
+        route: data.route,
+        trip,
+        employeeId: employee.id,
+        vehicleId: trip.vehicle_id ?? employee.assigned_vehicle_id ?? vehicle?.id ?? null,
+      });
+      await loadData();
     } finally {
       setSyncingRouteId(null);
     }
   }
 
-  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  const today = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
 
   return (
     <View style={styles.container}>
       <OfflineBanner />
 
-      {/* Modern Header matching mockup */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Settings')}>
-          <Text style={styles.iconText}>←</Text>
+          <Text style={styles.iconText}>⚙</Text>
         </TouchableOpacity>
-        
-        <Text style={styles.headerTitle}>New Trip Requests</Text>
-        
-        <TouchableOpacity style={styles.iconBtn}>
-          <Text style={styles.iconText}>🔔</Text>
-          <View style={styles.notificationDot}>
-            <Text style={styles.notificationCount}>3</Text>
-          </View>
-        </TouchableOpacity>
+
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>{employee?.full_name ?? 'Driver'}</Text>
+          <Text style={styles.headerSub}>{today}</Text>
+        </View>
+
+        <View style={styles.iconBtnPlaceholder} />
       </View>
 
-      {/* List Header */}
       <View style={styles.listHeaderRow}>
-        <Text style={styles.listHeaderTitle}>New Trip Requests</Text>
-        <TouchableOpacity>
-          <Text style={styles.seeAllText}>See All</Text>
-        </TouchableOpacity>
+        <Text style={styles.listHeaderTitle}>Today's Routes</Text>
+        {vehicle ? (
+          <Text style={styles.seeAllText}>{vehicle.vehicle_number}</Text>
+        ) : null}
       </View>
 
-      {/* Route List */}
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={Colors.primary} size="large" />
@@ -138,7 +161,14 @@ export default function HomeScreen() {
           keyExtractor={(item) => item.route.id}
           contentContainerStyle={styles.list}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={Colors.primary} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                loadData();
+              }}
+              tintColor={Colors.primary}
+            />
           }
           renderItem={({ item }) => (
             <RouteCard
@@ -181,36 +211,30 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  iconBtnPlaceholder: {
+    width: 44,
+    height: 44,
   },
   iconText: {
     color: Colors.textSecondary,
     fontSize: 18,
   },
-  notificationDot: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: Colors.primary,
-    borderRadius: Radius.full,
-    width: 20,
-    height: 20,
+  headerCenter: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: Colors.background,
-  },
-  notificationCount: {
-    color: Colors.black,
-    fontSize: 10,
-    fontWeight: 'bold',
   },
   headerTitle: {
     color: Colors.textPrimary,
     fontSize: Typography.fontSize.lg,
     fontWeight: Typography.fontWeight.medium,
+  },
+  headerSub: {
+    color: Colors.textTertiary,
+    fontSize: Typography.fontSize.xs,
+    marginTop: 2,
   },
   listHeaderRow: {
     flexDirection: 'row',

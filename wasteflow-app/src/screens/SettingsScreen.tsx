@@ -1,5 +1,5 @@
 // src/screens/SettingsScreen.tsx
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,12 +12,33 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useOffline } from '../context/OfflineQueueContext';
+import { getVehicle } from '../api';
 import { Colors, Typography, Spacing, Radius } from '../theme';
 
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
   const { employee, signOut } = useAuth();
   const { pendingCount, isSyncing, syncNow, isOnline } = useOffline();
+  const [vehicleLabel, setVehicleLabel] = useState('—');
+  const [routeLabel, setRouteLabel] = useState('—');
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      if (employee?.assigned_vehicle_id) {
+        const v = await getVehicle(employee.assigned_vehicle_id);
+        if (active) setVehicleLabel(v?.vehicle_number ?? '—');
+      } else if (active) {
+        setVehicleLabel('Unassigned');
+      }
+      if (active) {
+        setRouteLabel(employee?.assigned_route_id ? 'Assigned in ERP' : 'Unassigned');
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [employee]);
 
   async function handleSignOut() {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -25,14 +46,15 @@ export default function SettingsScreen() {
       {
         text: 'Sign Out',
         style: 'destructive',
-        onPress: async () => { await signOut(); },
+        onPress: async () => {
+          await signOut();
+        },
       },
     ]);
   }
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
           <Text style={styles.iconText}>←</Text>
@@ -42,7 +64,6 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Profile section */}
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
@@ -57,26 +78,21 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Driver details */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account Details</Text>
-
           <InfoRow icon="🪪" label="Employee Code" value={employee?.employee_code ?? '—'} />
           <InfoRow icon="📞" label="Phone" value={employee?.phone ?? '—'} />
-          <InfoRow icon="🚛" label="Assigned Vehicle" value="See ERP dashboard" />
-          <InfoRow icon="🗺️" label="Assigned Route" value="Fetched at runtime" />
+          <InfoRow icon="🚛" label="Assigned Vehicle" value={vehicleLabel} />
+          <InfoRow icon="🗺️" label="Assigned Route" value={routeLabel} />
         </View>
 
-        {/* Offline queue */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Offline Queue</Text>
-
           <View style={styles.offlineCard}>
             <View style={styles.offlineRow}>
               <View style={[styles.dot, { backgroundColor: isOnline ? Colors.primary : Colors.warning }]} />
               <Text style={styles.offlineStatus}>{isOnline ? 'Online' : 'Offline'}</Text>
             </View>
-
             <View style={styles.pendingRow}>
               <Text style={styles.pendingLabel}>Pending Events</Text>
               <View style={[styles.pendingBadge, pendingCount > 0 && styles.pendingBadgeActive]}>
@@ -85,7 +101,6 @@ export default function SettingsScreen() {
                 </Text>
               </View>
             </View>
-
             {isOnline && (
               <TouchableOpacity
                 style={[styles.syncBtn, isSyncing && styles.syncBtnDisabled]}
@@ -103,14 +118,12 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* App info */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>App Info</Text>
           <InfoRow icon="📱" label="App Version" value="1.0.0" />
-          <InfoRow icon="☁️" label="Backend" value="Supabase Cloud" />
+          <InfoRow icon="☁️" label="Backend" value="Lovable Cloud / Supabase" />
         </View>
 
-        {/* Sign out */}
         <View style={styles.section}>
           <TouchableOpacity
             style={styles.signOutBtn}
@@ -142,7 +155,6 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: Spacing.xl, paddingTop: Spacing['3xl'], paddingBottom: Spacing.xl,
@@ -155,9 +167,7 @@ const styles = StyleSheet.create({
   },
   iconText: { color: Colors.textSecondary, fontSize: 18 },
   headerTitle: { flex: 1, color: Colors.white, fontSize: Typography.fontSize.lg, fontWeight: Typography.fontWeight.bold, textAlign: 'center' },
-
   scroll: { padding: Spacing.xl },
-
   profileCard: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: Colors.card, borderRadius: Radius.xl, borderWidth: 1, borderColor: Colors.border,
@@ -173,10 +183,8 @@ const styles = StyleSheet.create({
   profileName: { color: Colors.textPrimary, fontSize: Typography.fontSize.lg, fontWeight: Typography.fontWeight.bold, marginBottom: 6 },
   driverBadge: { backgroundColor: Colors.primaryGlow, borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 2, alignSelf: 'flex-start' },
   driverBadgeText: { color: Colors.primary, fontSize: 10, fontWeight: Typography.fontWeight.extrabold, letterSpacing: 1.5 },
-
   section: { marginBottom: Spacing.xl },
   sectionTitle: { color: Colors.textTertiary, fontSize: Typography.fontSize.xs, fontWeight: Typography.fontWeight.semibold, textTransform: 'uppercase', letterSpacing: 1, marginBottom: Spacing.md },
-
   infoRow: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: Colors.card, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border,
@@ -186,7 +194,6 @@ const styles = StyleSheet.create({
   infoContent: { flex: 1 },
   infoLabel: { color: Colors.textTertiary, fontSize: Typography.fontSize.xs, marginBottom: 2 },
   infoValue: { color: Colors.textPrimary, fontSize: Typography.fontSize.base, fontWeight: Typography.fontWeight.medium },
-
   offlineCard: { backgroundColor: Colors.card, borderRadius: Radius.xl, borderWidth: 1, borderColor: Colors.border, padding: Spacing.xl },
   offlineRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.base },
   dot: { width: 10, height: 10, borderRadius: 5, marginRight: Spacing.sm },
@@ -200,7 +207,6 @@ const styles = StyleSheet.create({
   syncBtn: { backgroundColor: Colors.info, borderRadius: Radius.full, paddingVertical: Spacing.md, alignItems: 'center' },
   syncBtnDisabled: { opacity: 0.7 },
   syncBtnText: { color: Colors.white, fontWeight: Typography.fontWeight.bold },
-
   signOutBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     backgroundColor: Colors.dangerBg, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.danger,

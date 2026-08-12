@@ -1023,6 +1023,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ensure_my_employee: { Args: Record<string, never>; Returns: Database["public"]["Tables"]["employees"]["Row"] }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

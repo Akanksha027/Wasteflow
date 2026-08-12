@@ -51,7 +51,12 @@ function AuthPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
-      toast.error(error.message);
+      const msg = error.message.toLowerCase();
+      if (msg.includes("email not confirmed")) {
+        toast.error("Confirm your email first — check your inbox for the WasteFlow link.");
+      } else {
+        toast.error(error.message);
+      }
       return;
     }
     toast.success("Welcome back");
@@ -61,7 +66,7 @@ function AuthPage() {
   const signUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -74,7 +79,12 @@ function AuthPage() {
       toast.error(error.message);
       return;
     }
-    toast.success("Account created. You can sign in now.");
+    if (data.session) {
+      toast.success("Account created. Welcome!");
+      void navigate({ to: "/dashboard" });
+      return;
+    }
+    toast.success("Account created. Confirm your email, then sign in. Drivers also need an employee link in ERP → Employees.");
   };
 
   const google = async () => {

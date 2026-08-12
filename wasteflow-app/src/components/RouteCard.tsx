@@ -62,13 +62,13 @@ export default function RouteCard({ route, stopCount, trip, onPress, isSyncing }
           style={[
             styles.primaryBtn, 
             isActive && styles.primaryBtnActive,
-            (isCompleted || isSyncing) && styles.btnDisabled
+            isSyncing && styles.btnDisabled
           ]}
           onPress={onPress}
-          disabled={isCompleted || isSyncing}
+          disabled={isSyncing}
         >
           <Text style={[styles.primaryBtnText, isActive && styles.textWhite]}>
-            {isActive ? 'Continue Trip' : 'Accept Trip'}
+            {isActive ? 'Resume Trip' : isCompleted ? 'Start New Trip' : 'Start Trip'}
           </Text>
         </TouchableOpacity>
       </View>

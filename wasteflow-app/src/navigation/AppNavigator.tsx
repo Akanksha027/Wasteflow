@@ -17,7 +17,7 @@ import { Colors } from '../theme';
 const Stack = createNativeStackNavigator();
 
 export default function AppNavigator() {
-  const { session, role, loading } = useAuth();
+  const { session, role, employee, loading } = useAuth();
 
   if (loading) {
     return (
@@ -27,11 +27,12 @@ export default function AppNavigator() {
     );
   }
 
-  const isAuthenticated = !!session && role === 'driver';
+  const isAuthenticated = !!session && role === 'driver' && !!employee;
 
   return (
     <NavigationContainer>
       <Stack.Navigator
+        id="WasteFlowDriver"
         initialRouteName={isAuthenticated ? 'Home' : 'Onboarding'}
         screenOptions={{
           headerShown: false,

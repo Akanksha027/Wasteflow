@@ -29,10 +29,11 @@ export async function getUserRole(userId: string): Promise<string | null> {
   const { data, error } = await supabase
     .from('user_roles')
     .select('role')
-    .eq('user_id', userId)
-    .single();
-  if (error) return null;
-  return data?.role ?? null;
+    .eq('user_id', userId);
+  if (error || !data?.length) return null;
+  const priority = ['admin', 'supervisor', 'driver', 'field_worker'];
+  const roles = data.map((r) => r.role as string);
+  return priority.find((r) => roles.includes(r)) ?? roles[0] ?? null;
 }
 
 // ─── Employee / Profile ────────────────────────────────────────────────────────
@@ -42,12 +43,42 @@ export async function getDriverEmployee(userId: string): Promise<Employee | null
     .from('employees')
     .select('*')
     .eq('user_id', userId)
+    .eq('is_archived', false)
     .maybeSingle();
   if (error) {
     console.warn('getDriverEmployee error:', error.message);
     return null;
   }
-  return data;
+  if (data) return data;
+
+  // Demo/fallback: use an unlinked active driver employee so trips can be written
+  // with a valid driver_id FK until admin links the auth user in ERP.
+  const { data: fallback, error: fallbackError } = await supabase
+    .from('employees')
+    .select('*')
+    .eq('role', 'driver')
+    .is('user_id', null)
+    .eq('is_archived', false)
+    .eq('status', 'active')
+    .order('employee_code')
+    .limit(1)
+    .maybeSingle();
+
+  if (fallbackError) {
+    console.warn('getDriverEmployee fallback error:', fallbackError.message);
+    return null;
+  }
+  return fallback;
+}
+
+/** Prefer DB RPC when migration is applied; otherwise falls back to getDriverEmployee. */
+export async function ensureMyEmployee(): Promise<Employee | null> {
+  const { data, error } = await supabase.rpc('ensure_my_employee');
+  if (!error && data) return data as Employee;
+
+  const { data: sessionData } = await supabase.auth.getUser();
+  if (!sessionData.user) return null;
+  return getDriverEmployee(sessionData.user.id);
 }
 
 export async function getVehicle(vehicleId: string): Promise<Vehicle | null> {
@@ -63,23 +94,24 @@ export async function getVehicle(vehicleId: string): Promise<Vehicle | null> {
 // ─── Routes & Stops ────────────────────────────────────────────────────────────
 
 export async function getDriverRoutes(driverEmployeeId: string): Promise<Route[]> {
-  // Get all routes associated with the driver via their assigned_route_id
   const { data: emp } = await supabase
     .from('employees')
     .select('assigned_route_id')
     .eq('id', driverEmployeeId)
     .maybeSingle();
 
-  if (!emp?.assigned_route_id) return [];
+  // Prefer assigned route; if none, show all active routes (supervisor-unassigned demos)
+  if (emp?.assigned_route_id) {
+    const { data, error } = await supabase
+      .from('routes')
+      .select('*')
+      .eq('id', emp.assigned_route_id)
+      .eq('is_active', true);
+    if (error) return [];
+    return data ?? [];
+  }
 
-  const { data, error } = await supabase
-    .from('routes')
-    .select('*')
-    .eq('id', emp.assigned_route_id)
-    .eq('is_active', true);
-
-  if (error) return [];
-  return data ?? [];
+  return getAllActiveRoutes();
 }
 
 export async function getAllActiveRoutes(): Promise<Route[]> {
@@ -112,7 +144,7 @@ export async function getRouteStops(routeId: string): Promise<RouteStop[]> {
     console.warn('getRouteStops error:', error.message);
     return [];
   }
-  return (data as RouteStop[]) ?? [];
+  return ((data ?? []) as unknown as RouteStop[]);
 }
 
 export async function getBwgByQr(qrCode: string) {
@@ -135,7 +167,7 @@ export async function getTodayTrip(routeId: string, driverEmployeeId: string): P
     .eq('route_id', routeId)
     .eq('driver_id', driverEmployeeId)
     .eq('trip_date', today)
-    .not('status', 'eq', 'cancelled')
+    .eq('status', 'in_progress')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -228,6 +260,7 @@ export async function submitCollectionEvent(params: {
   remarks?: string;
   photoUrl?: string;
   status?: string;
+  isOverride?: boolean;
 }): Promise<string | null> {
   const { data, error } = await supabase
     .from('collection_events')
@@ -247,6 +280,7 @@ export async function submitCollectionEvent(params: {
       status: params.status ?? 'collected',
       remarks: params.remarks ?? null,
       photo_url: params.photoUrl ?? null,
+      is_override: params.isOverride ?? false,
       checklist: {
         arrived: true,
         qr_scanned: true,
