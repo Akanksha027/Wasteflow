@@ -32,14 +32,15 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={styles.content}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.backIcon}>←</Text>
-        </TouchableOpacity>
+    <View style={styles.container}>
+      <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+        <Text style={styles.backIcon}>←</Text>
+      </TouchableOpacity>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.content}>
 
         <View style={styles.header}>
           <View style={styles.logoBox}>
@@ -101,6 +102,7 @@ export default function LoginScreen() {
         </View>
       </View>
     </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -112,7 +114,8 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: Spacing.xl,
-    paddingTop: Spacing['3xl'],
+    justifyContent: 'center',
+    paddingBottom: 80, // Shift content a bit upwards
   },
   backBtn: {
     width: 44,
@@ -124,13 +127,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     marginBottom: Spacing.xl,
+    position: 'absolute',
+    top: Spacing['3xl'],
+    left: Spacing.xl,
+    zIndex: 99,
+    elevation: 10,
   },
   backIcon: {
     color: Colors.textSecondary,
-    fontSize: 18,
+    fontSize: 24,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    marginTop: -4,
   },
   header: {
     marginBottom: Spacing['3xl'],
+    marginTop: Spacing['3xl'] * 2, // Space for the absolute back button
+    alignItems: 'center', // Center children horizontally
   },
   logoBox: {
     width: 64,
@@ -152,10 +166,12 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize['3xl'],
     fontWeight: Typography.fontWeight.bold,
     marginBottom: Spacing.xs,
+    textAlign: 'center',
   },
   subtitle: {
     color: Colors.textSecondary,
     fontSize: Typography.fontSize.base,
+    textAlign: 'center',
   },
   form: {
     marginBottom: Spacing['3xl'],
@@ -190,7 +206,6 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeight.medium,
   },
   actions: {
-    marginTop: 'auto',
     marginBottom: Spacing.xl,
   },
   loginBtn: {
