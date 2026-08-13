@@ -140,7 +140,14 @@ export interface GpsEvent {
 
 export interface OfflineQueueItem {
   id: string;
-  type: 'collection_event' | 'collection_item' | 'trip_start' | 'trip_end' | 'gps_event' | 'skip_stop';
+  type:
+    | 'collection'
+    | 'collection_event'
+    | 'collection_item'
+    | 'trip_start'
+    | 'trip_end'
+    | 'gps_event'
+    | 'skip_stop';
   payload: any;
   createdAt: number;
   retries: number;

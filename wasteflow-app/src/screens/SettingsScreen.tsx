@@ -12,7 +12,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useOffline } from '../context/OfflineQueueContext';
-import { getVehicle } from '../api';
+import { getRoute, getVehicle } from '../api';
 import { Colors, Typography, Spacing, Radius } from '../theme';
 
 export default function SettingsScreen() {
@@ -31,8 +31,11 @@ export default function SettingsScreen() {
       } else if (active) {
         setVehicleLabel('Unassigned');
       }
-      if (active) {
-        setRouteLabel(employee?.assigned_route_id ? 'Assigned in ERP' : 'Unassigned');
+      if (employee?.assigned_route_id) {
+        const route = await getRoute(employee.assigned_route_id);
+        if (active) setRouteLabel(route ? `${route.route_code} · ${route.name}` : 'Assigned in ERP');
+      } else if (active) {
+        setRouteLabel('Unassigned');
       }
     })();
     return () => {

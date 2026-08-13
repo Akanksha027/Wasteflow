@@ -2,9 +2,13 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { Alert } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
 import { supabase } from '../lib/supabase';
 import { getUserRole, getDriverEmployee, ensureMyEmployee, signIn as apiSignIn, resetPassword } from '../api';
 import { Employee } from '../types';
+
+WebBrowser.maybeCompleteAuthSession();
 
 interface AuthContextValue {
   session: Session | null;
@@ -14,6 +18,7 @@ interface AuthContextValue {
   loading: boolean;
   signingIn: boolean;
   signIn: (email: string, password: string) => Promise<boolean>;
+  signInWithGoogle: () => Promise<boolean>;
   forgotPassword: (email: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   refreshEmployee: () => Promise<void>;
@@ -27,6 +32,7 @@ const AuthContext = createContext<AuthContextValue>({
   loading: true,
   signingIn: false,
   signIn: async () => false,
+  signInWithGoogle: async () => false,
   forgotPassword: async () => false,
   signOut: async () => {},
   refreshEmployee: async () => {},
@@ -56,6 +62,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { role: r, employee: emp };
   }
 
+  async function finalizeDriverSession(authedUser: User, nextSession: Session | null): Promise<boolean> {
+    const { role: r, employee: emp } = await loadUserData(authedUser);
+
+    if (r !== 'driver') {
+      await supabase.auth.signOut();
+      setSession(null);
+      setUser(null);
+      setRole(null);
+      setEmployee(null);
+      Alert.alert(
+        'Access denied',
+        'This app is for drivers only. Admins and supervisors should use WasteFlow ERP.',
+      );
+      return false;
+    }
+
+    if (!emp) {
+      await supabase.auth.signOut();
+      setSession(null);
+      setUser(null);
+      setRole(null);
+      setEmployee(null);
+      Alert.alert(
+        'No employee profile',
+        'Your account is not linked to a driver employee record. Ask an admin to link you in ERP → Employees.',
+      );
+      return false;
+    }
+
+    setSession(nextSession);
+    setUser(authedUser);
+    return true;
+  }
+
   async function refreshEmployee() {
     if (user) {
       let emp = await getDriverEmployee(user.id);
@@ -73,7 +113,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(s?.user ?? null);
       if (s?.user) {
         const { role: r } = await loadUserData(s.user);
-        // Persist only drivers in the mobile app session
         if (r && r !== 'driver') {
           await supabase.auth.signOut();
           if (active) {
@@ -88,7 +127,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, s) => {
-      // Avoid re-entry loops during our own signIn validation
       if (event === 'SIGNED_OUT') {
         setSession(null);
         setUser(null);
@@ -137,37 +175,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      const { role: r, employee: emp } = await loadUserData(authedUser);
+      return finalizeDriverSession(authedUser, data.session);
+    } finally {
+      setSigningIn(false);
+    }
+  }
 
-      if (r !== 'driver') {
-        await supabase.auth.signOut();
-        setSession(null);
-        setUser(null);
-        setRole(null);
-        setEmployee(null);
+  async function signInWithGoogle(): Promise<boolean> {
+    setSigningIn(true);
+    try {
+      const redirectTo = AuthSession.makeRedirectUri({
+        scheme: 'wasteflow',
+        path: 'auth/callback',
+      });
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error || !data.url) {
         Alert.alert(
-          'Access denied',
-          'This app is for drivers only. Admins and supervisors should use WasteFlow ERP.',
+          'Google sign-in unavailable',
+          error?.message ?? 'Use email and password, or ask admin to enable Google redirect for the driver app.',
         );
         return false;
       }
 
-      if (!emp) {
-        await supabase.auth.signOut();
-        setSession(null);
-        setUser(null);
-        setRole(null);
-        setEmployee(null);
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      if (result.type !== 'success' || !('url' in result) || !result.url) {
+        return false;
+      }
+
+      const url = result.url;
+      const hash = url.includes('#') ? url.split('#')[1] : url.split('?')[1] ?? '';
+      const params = new URLSearchParams(hash);
+      const access_token = params.get('access_token');
+      const refresh_token = params.get('refresh_token');
+
+      if (!access_token || !refresh_token) {
         Alert.alert(
-          'No employee profile',
-          'Your account is not linked to a driver employee record. Ask an admin to link you in ERP → Employees.',
+          'Google sign-in incomplete',
+          'Add wasteflow://auth/callback to Supabase Auth redirect URLs, or sign in with email.',
         );
         return false;
       }
 
-      setSession(data.session);
-      setUser(authedUser);
-      return true;
+      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+        access_token,
+        refresh_token,
+      });
+      if (sessionError || !sessionData.user) {
+        Alert.alert('Google sign-in failed', sessionError?.message ?? 'Could not create a session.');
+        return false;
+      }
+
+      return finalizeDriverSession(sessionData.user, sessionData.session);
+    } catch (e: any) {
+      Alert.alert('Google sign-in failed', e?.message ?? 'Something went wrong.');
+      return false;
     } finally {
       setSigningIn(false);
     }
@@ -205,6 +274,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         signingIn,
         signIn,
+        signInWithGoogle,
         forgotPassword,
         signOut,
         refreshEmployee,

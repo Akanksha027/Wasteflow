@@ -7,16 +7,24 @@ import { Colors, Typography, Spacing, Radius, Shadow } from '../theme';
 interface Props {
   route: Route;
   stopCount: number;
+  todayCount: number;
+  collectedCount: number;
   trip: CollectionTrip | null;
   onPress: () => void;
   isSyncing?: boolean;
 }
 
-export default function RouteCard({ route, stopCount, trip, onPress, isSyncing }: Props) {
+export default function RouteCard({
+  route,
+  stopCount,
+  todayCount,
+  collectedCount,
+  trip,
+  onPress,
+  isSyncing,
+}: Props) {
   const isActive = trip && trip.status === 'in_progress';
   const isCompleted = trip && trip.status === 'completed';
-
-  const collectedCount = trip?.total_collected_kg ? 'Started' : 'Pending';
 
   return (
     <View style={[styles.card, isActive && styles.cardActive, isCompleted && styles.cardCompleted]}>
@@ -28,7 +36,7 @@ export default function RouteCard({ route, stopCount, trip, onPress, isSyncing }
         <View style={styles.info}>
           <Text style={[styles.routeName, isActive && styles.textBlack]}>{route.name}</Text>
           <Text style={[styles.routeCode, isActive && styles.textBlackSoft]}>
-            {route.route_code} • {stopCount} Stops
+            {route.route_code} • {todayCount} today / {stopCount} stops
           </Text>
         </View>
         
@@ -42,22 +50,22 @@ export default function RouteCard({ route, stopCount, trip, onPress, isSyncing }
 
       {/* Details Row */}
       <View style={styles.detailsRow}>
-        <Text style={[styles.detailText, isActive && styles.textBlack]}>{route.ward || 'General'}</Text>
+        <Text style={[styles.detailText, isActive && styles.textBlack]}>{route.ward || '—'}</Text>
         <View style={[styles.dot, isActive && { backgroundColor: Colors.black }]} />
-        <Text style={[styles.detailText, isActive && styles.textBlack]}>Today</Text>
-        <View style={[styles.dot, isActive && { backgroundColor: Colors.black }]} />
-        <Text style={[styles.detailText, isActive && styles.textBlack]}>{collectedCount}</Text>
+        <Text style={[styles.detailText, isActive && styles.textBlack]}>
+          {collectedCount}/{todayCount} collected
+        </Text>
+        {trip?.total_collected_kg ? (
+          <>
+            <View style={[styles.dot, isActive && { backgroundColor: Colors.black }]} />
+            <Text style={[styles.detailText, isActive && styles.textBlack]}>
+              {Number(trip.total_collected_kg).toFixed(0)} kg
+            </Text>
+          </>
+        ) : null}
       </View>
 
-      {/* Buttons */}
       <View style={styles.actionRow}>
-        <TouchableOpacity 
-          style={[styles.secondaryBtn, isActive && styles.secondaryBtnActive]}
-          disabled={isCompleted || isSyncing}
-        >
-          <Text style={[styles.secondaryBtnText, isActive && styles.textWhite]}>Details</Text>
-        </TouchableOpacity>
-        
         <TouchableOpacity 
           style={[
             styles.primaryBtn, 

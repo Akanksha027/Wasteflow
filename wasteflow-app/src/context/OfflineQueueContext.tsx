@@ -34,6 +34,39 @@ export function OfflineQueueProvider({ children }: { children: ReactNode }) {
   async function processQueueItem(item: OfflineQueueItem): Promise<boolean> {
     try {
       switch (item.type) {
+        case 'collection': {
+          const { event, items, status, gps } = item.payload;
+          const { error } = await supabase.from('collection_events').insert(event);
+          if (error) return false;
+          if (items?.length) {
+            const { error: itemErr } = await supabase.from('collection_items').insert(items);
+            if (itemErr) return false;
+          }
+          if (status) {
+            const { error: statusErr } = await supabase
+              .from('daily_bwg_status')
+              .upsert(status, { onConflict: 'status_date,bwg_id' });
+            if (statusErr) return false;
+          }
+          if (gps) {
+            await supabase.from('gps_events').insert(gps);
+          }
+          if (event?.trip_id) {
+            const { data } = await supabase
+              .from('collection_events')
+              .select('total_kg')
+              .eq('trip_id', event.trip_id);
+            const total = (data ?? []).reduce(
+              (sum: number, e: { total_kg?: number }) => sum + (e.total_kg ?? 0),
+              0,
+            );
+            await supabase
+              .from('collection_trips')
+              .update({ total_collected_kg: total })
+              .eq('id', event.trip_id);
+          }
+          return true;
+        }
         case 'collection_event': {
           const { error } = await supabase.from('collection_events').insert(item.payload);
           return !error;
@@ -43,7 +76,9 @@ export function OfflineQueueProvider({ children }: { children: ReactNode }) {
           return !error;
         }
         case 'trip_start': {
-          const { error } = await supabase.from('collection_trips').insert(item.payload);
+          const { error } = await supabase.from('collection_trips').upsert(item.payload, {
+            onConflict: 'id',
+          });
           return !error;
         }
         case 'trip_end': {
@@ -81,18 +116,17 @@ export function OfflineQueueProvider({ children }: { children: ReactNode }) {
     setIsSyncing(false);
   }, [isSyncing]);
 
-  // Watch connectivity
   useEffect(() => {
     const unsub = NetInfo.addEventListener((state) => {
-      const online = !!state.isConnected && !!state.isInternetReachable;
+      const online = state.isConnected !== false;
       setIsOnline(online);
       if (online) {
-        syncNow();
+        void syncNow();
       }
     });
-    refreshCount();
+    void refreshCount();
     return () => unsub();
-  }, []);
+  }, [syncNow]);
 
   async function enqueue(item: Omit<OfflineQueueItem, 'id' | 'createdAt' | 'retries'>) {
     await offlineQueue.enqueue(item);

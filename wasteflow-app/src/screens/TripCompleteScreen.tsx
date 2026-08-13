@@ -14,7 +14,7 @@ import {
   View,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { completeTrip, getTodayEventsForTrip, getWasteTypes } from '../api';
+import { completeTrip, getTripWeightBreakdown, getWasteTypes } from '../api';
 import { getCurrentLocation } from '../services/location';
 import { CollectionTrip, Route, StopWithStatus } from '../types';
 import { Colors, Typography, Spacing, Radius, WASTE_TYPE_COLORS, WASTE_TYPE_NAMES } from '../theme';
@@ -37,6 +37,7 @@ export default function TripCompleteScreen() {
   const [endOdometer, setEndOdometer] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [weightByType, setWeightByType] = useState<Record<string, number>>({});
+  const [typeMeta, setTypeMeta] = useState<Record<string, { name: string; color: string | null }>>({});
   const [loading, setLoading] = useState(true);
 
   const celebrationAnim = useRef(new Animated.Value(0)).current;
@@ -62,17 +63,11 @@ export default function TripCompleteScreen() {
   }, []);
 
   async function loadWeightBreakdown() {
-    const events = await getTodayEventsForTrip(trip.id);
-    const types = await getWasteTypes();
-    // Sum up from events (simplified — total_kg used as proxy)
-    const totalKg = events.reduce((sum, e) => sum + (e.total_kg ?? 0), 0);
-    // Rough breakdown proportions matching seed data
-    const breakdown: Record<string, number> = {};
-    types.slice(0, 3).forEach((wt, i) => {
-      const fracs = [0.55, 0.30, 0.15];
-      breakdown[wt.code] = parseFloat((totalKg * fracs[i]).toFixed(2));
-    });
+    const [breakdown, types] = await Promise.all([getTripWeightBreakdown(trip.id), getWasteTypes()]);
     setWeightByType(breakdown);
+    setTypeMeta(
+      Object.fromEntries(types.map((t) => [t.code, { name: t.name, color: t.color }])),
+    );
     setLoading(false);
   }
 
@@ -165,8 +160,8 @@ export default function TripCompleteScreen() {
                 {Object.entries(weightByType).map(([code, kg]) => (
                   <View key={code} style={styles.weightRow}>
                     <View style={styles.weightLeft}>
-                      <View style={[styles.colorDot, { backgroundColor: WASTE_TYPE_COLORS[code] ?? Colors.border }]} />
-                      <Text style={styles.weightLabel}>{WASTE_TYPE_NAMES[code] ?? code}</Text>
+                      <View style={[styles.colorDot, { backgroundColor: typeMeta[code]?.color ?? WASTE_TYPE_COLORS[code] ?? Colors.border }]} />
+                      <Text style={styles.weightLabel}>{typeMeta[code]?.name ?? WASTE_TYPE_NAMES[code] ?? code}</Text>
                     </View>
                     <Text style={styles.weightValue}>{kg.toFixed(2)} kg</Text>
                   </View>

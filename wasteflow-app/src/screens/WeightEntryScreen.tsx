@@ -15,16 +15,9 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import {
-  submitCollectionEvent,
-  submitCollectionItems,
-  getWasteTypes,
-  upsertDailyStatus,
-  updateTripTotalKg,
-  logGpsEvent,
-} from '../api';
+import { submitCollectionBundle, getWasteTypes, getTodayEventForBwg } from '../api';
 import { formatAccuracy } from '../services/location';
-import { Bwg, Route, CollectionTrip, StopWithStatus, LocationCoords } from '../types';
+import { Bwg, Route, CollectionTrip, StopWithStatus, LocationCoords, WasteType } from '../types';
 import { Colors, Typography, Spacing, Radius, WASTE_TYPE_COLORS, WASTE_TYPE_NAMES } from '../theme';
 
 type WeightParams = {
@@ -49,7 +42,7 @@ export default function WeightEntryScreen() {
   const [remarks, setRemarks] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [wasteTypes, setWasteTypes] = useState<Array<{ id: string; code: string; name: string }>>([]);
+  const [wasteTypes, setWasteTypes] = useState<WasteType[]>([]);
   const [loadingTypes, setLoadingTypes] = useState(true);
 
   useEffect(() => {
@@ -95,21 +88,34 @@ export default function WeightEntryScreen() {
     setSubmitting(true);
     try {
       const totalKg = getTotalKg();
-
-      // Log GPS event
-      if (location) {
-        await logGpsEvent({
-          event_type: 'scan',
-          trip_id: trip.id,
-          bwg_id: bwg.id,
-          vehicle_id: vehicleId,
-          employee_id: employeeId,
-          location,
-        });
+      let override = isOverride;
+      if (!override) {
+        const existing = await getTodayEventForBwg(bwg.id, route.id);
+        if (existing) {
+          const proceed = await new Promise<boolean>((resolve) => {
+            Alert.alert(
+              'Already collected today',
+              'This generator already has a collection today. Submit as an override?',
+              [
+                { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                { text: 'Override', onPress: () => resolve(true) },
+              ],
+            );
+          });
+          if (!proceed) return;
+          override = true;
+        }
       }
 
-      // Submit collection event
-      const eventId = await submitCollectionEvent({
+      const itemsToSubmit = wasteTypes
+        .filter((wt) => parseFloat(weights[wt.code] ?? '0') > 0)
+        .map((wt) => ({
+          waste_type_id: wt.id,
+          quantity_kg: parseFloat(weights[wt.code] ?? '0'),
+          code: wt.code,
+        }));
+
+      const result = await submitCollectionBundle({
         tripId: trip.id,
         bwgId: bwg.id,
         routeId: route.id,
@@ -118,39 +124,21 @@ export default function WeightEntryScreen() {
         location,
         totalKg,
         remarks: remarks.trim() || undefined,
+        photoUri,
         status: 'collected',
-        isOverride,
+        isOverride: override,
+        items: itemsToSubmit,
       });
 
-      if (!eventId) {
+      if (!result) {
         Alert.alert('Submission Failed', 'Could not save collection event. Please try again.');
         return;
       }
 
-      // Submit weight breakdown items
-      const itemsToSubmit = wasteTypes
-        .filter((wt) => parseFloat(weights[wt.code] ?? '0') > 0)
-        .map((wt) => ({
-          waste_type_id: wt.id,
-          quantity_kg: parseFloat(weights[wt.code] ?? '0'),
-        }));
-      if (itemsToSubmit.length > 0) {
-        await submitCollectionItems(eventId, itemsToSubmit);
+      if (result.queued) {
+        Alert.alert('Saved offline', 'This stop will sync automatically when you are back online.');
       }
 
-      // Update daily status board
-      await upsertDailyStatus({
-        bwg_id: bwg.id,
-        route_id: route.id,
-        status: 'collected',
-        collected_kg: totalKg,
-        event_id: eventId,
-      });
-
-      // Recalculate trip total
-      await updateTripTotalKg(trip.id);
-
-      // Return to Stop List — useFocusEffect on StopListScreen will refresh statuses
       navigation.pop(2);
     } catch (e: any) {
       Alert.alert('Error', e?.message ?? 'Something went wrong. Please try again.');
@@ -228,12 +216,12 @@ export default function WeightEntryScreen() {
             </View>
           ) : (
             wasteTypes.map((wt, index) => (
-              <View key={wt.code} style={[styles.weightCard, { borderLeftColor: WASTE_TYPE_COLORS[wt.code] ?? Colors.border }]}>
+              <View key={wt.code} style={[styles.weightCard, { borderLeftColor: wt.color ?? WASTE_TYPE_COLORS[wt.code] ?? Colors.border }]}>
                 <View style={styles.weightLeft}>
-                  <Text style={[styles.wasteCode, { color: WASTE_TYPE_COLORS[wt.code] ?? Colors.textSecondary }]}>
+                  <Text style={[styles.wasteCode, { color: wt.color ?? WASTE_TYPE_COLORS[wt.code] ?? Colors.textSecondary }]}>
                     {wt.code}
                   </Text>
-                  <Text style={styles.wasteName}>{WASTE_TYPE_NAMES[wt.code] ?? wt.name}</Text>
+                  <Text style={styles.wasteName}>{wt.name}</Text>
                 </View>
                 <View style={styles.weightRight}>
                   <TextInput

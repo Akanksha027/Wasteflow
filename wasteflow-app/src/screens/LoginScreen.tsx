@@ -17,7 +17,7 @@ import { Colors, Typography, Spacing, Radius } from '../theme';
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { signIn, forgotPassword, signingIn } = useAuth();
+  const { signIn, signInWithGoogle, forgotPassword, signingIn } = useAuth();
   const navigation = useNavigation<any>();
 
   async function handleLogin() {
@@ -95,6 +95,18 @@ export default function LoginScreen() {
             ) : (
               <Text style={styles.loginBtnText}>Log In</Text>
             )}
+          </TouchableOpacity>
+          <View style={styles.orRow}>
+            <View style={styles.orLine} />
+            <Text style={styles.orText}>or</Text>
+            <View style={styles.orLine} />
+          </View>
+          <TouchableOpacity
+            style={[styles.googleBtn, signingIn && styles.loginBtnDisabled]}
+            onPress={() => void signInWithGoogle()}
+            disabled={signingIn}
+          >
+            <Text style={styles.googleBtnText}>Sign in with Google</Text>
           </TouchableOpacity>
           <Text style={styles.hint}>
             Accounts are created by admins in WasteFlow ERP. Drivers cannot self-register here.
@@ -228,5 +240,26 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: Spacing.base,
     lineHeight: 18,
+  },
+  orRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: Spacing.base,
+    gap: 8,
+  },
+  orLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+  orText: { color: Colors.textTertiary, fontSize: Typography.fontSize.xs },
+  googleBtn: {
+    backgroundColor: Colors.card,
+    borderRadius: Radius.full,
+    paddingVertical: Spacing.lg,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  googleBtnText: {
+    color: Colors.white,
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.bold,
   },
 });

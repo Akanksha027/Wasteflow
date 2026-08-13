@@ -101,7 +101,7 @@ export default function StopListScreen() {
     setSkipping(true);
     try {
       const loc = await getCurrentLocation();
-      const eventId = await skipStop({
+      const result = await skipStop({
         tripId: trip.id,
         bwgId: skipTargetStop.bwg_id,
         routeId: route.id,
@@ -111,10 +111,10 @@ export default function StopListScreen() {
         location: loc,
       });
 
-      if (eventId) {
+      if (result?.id) {
         setStops((prev) =>
           prev.map((s) =>
-            s.id === skipTargetStop.id ? { ...s, status: 'skipped', event_id: eventId } : s
+            s.id === skipTargetStop.id ? { ...s, status: 'skipped', event_id: result.id } : s
           )
         );
       }

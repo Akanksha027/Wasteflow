@@ -13,10 +13,10 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { getBwgByQr } from '../api';
-import { getCurrentLocation } from '../services/location';
-import { Bwg, Route, CollectionTrip, StopWithStatus } from '../types';
-import { Colors, Typography, Spacing, Radius, WASTE_TYPE_NAMES, WASTE_TYPE_COLORS } from '../theme';
+import { getBwgByQr, getLastCollection, getWasteTypes } from '../api';
+import { formatAccuracy, getCurrentLocation } from '../services/location';
+import { Bwg, LocationCoords, Route, CollectionTrip, StopWithStatus, WasteType } from '../types';
+import { Colors, Typography, Spacing, Radius } from '../theme';
 
 type ScanParams = {
   Scan: {
@@ -41,6 +41,9 @@ export default function ScanScreen() {
   const [manualEntry, setManualEntry] = useState(false);
   const [manualCode, setManualCode] = useState('');
   const [mismatchBwg, setMismatchBwg] = useState<Bwg | null>(null);
+  const [lastCollection, setLastCollection] = useState<{ scanned_at: string; total_kg: number } | null>(null);
+  const [scanLocation, setScanLocation] = useState<LocationCoords | null>(null);
+  const [wasteTypes, setWasteTypes] = useState<WasteType[]>([]);
 
   const scanLineAnim = useRef(new Animated.Value(0)).current;
   const successAnim = useRef(new Animated.Value(0)).current;
@@ -48,6 +51,7 @@ export default function ScanScreen() {
   useEffect(() => {
     if (!permission?.granted) requestPermission();
     startScanAnimation();
+    void getWasteTypes().then(setWasteTypes);
   }, []);
 
   function startScanAnimation() {
@@ -83,6 +87,12 @@ export default function ScanScreen() {
     setIsOverride(override || fetchedBwg.id !== stop.bwg_id);
     setScanned(true);
     setScanning(false);
+    const [last, loc] = await Promise.all([
+      getLastCollection(fetchedBwg.id),
+      getCurrentLocation(),
+    ]);
+    setLastCollection(last);
+    setScanLocation(loc);
     Animated.spring(successAnim, { toValue: 1, tension: 80, friction: 8, useNativeDriver: true }).start();
   }
 
@@ -98,7 +108,7 @@ export default function ScanScreen() {
   }
 
   async function proceedToWeight() {
-    const loc = await getCurrentLocation();
+    const loc = scanLocation ?? (await getCurrentLocation());
     navigation.navigate('WeightEntry', {
       stop,
       bwg: bwg ?? stop.bwg,
@@ -216,18 +226,38 @@ export default function ScanScreen() {
               <Text style={styles.bwgAddress}>{bwg.address}{bwg.ward ? ` — ${bwg.ward}` : ''}</Text>
               {bwg.waste_type_codes?.length > 0 && (
                 <View style={styles.wasteTypesRow}>
-                  {bwg.waste_type_codes.map((code) => (
-                    <View key={code} style={[styles.wasteTag, { backgroundColor: (WASTE_TYPE_COLORS[code] ?? '#666') + '22' }]}>
-                      <Text style={[styles.wasteTagText, { color: WASTE_TYPE_COLORS[code] ?? Colors.textSecondary }]}>
-                        {WASTE_TYPE_NAMES[code] ?? code}
-                      </Text>
-                    </View>
-                  ))}
+                  {bwg.waste_type_codes.map((code) => {
+                    const wt = wasteTypes.find((t) => t.code === code);
+                    const color = wt?.color ?? Colors.textSecondary;
+                    return (
+                      <View key={code} style={[styles.wasteTag, { backgroundColor: `${color}22` }]}>
+                        <Text style={[styles.wasteTagText, { color }]}>
+                          {wt?.name ?? code}
+                        </Text>
+                      </View>
+                    );
+                  })}
                 </View>
               )}
               <View style={styles.expectedKgRow}>
                 <Text style={styles.expectedKgLabel}>Expected today</Text>
                 <Text style={styles.expectedKgValue}>{bwg.daily_expected_kg} kg</Text>
+              </View>
+              <View style={styles.expectedKgRow}>
+                <Text style={styles.expectedKgLabel}>Last collection</Text>
+                <Text style={styles.lastCollectionValue}>
+                  {lastCollection
+                    ? `${new Date(lastCollection.scanned_at).toLocaleDateString()} · ${lastCollection.total_kg} kg`
+                    : 'No prior pickup'}
+                </Text>
+              </View>
+              <View style={styles.expectedKgRow}>
+                <Text style={styles.expectedKgLabel}>GPS</Text>
+                <Text style={styles.lastCollectionValue}>
+                  {scanLocation
+                    ? `Captured · ${formatAccuracy(scanLocation.accuracy)}`
+                    : 'Location unavailable'}
+                </Text>
               </View>
             </View>
 
@@ -267,6 +297,7 @@ export default function ScanScreen() {
                   setBwg(b);
                   setIsOverride(true);
                   setScanned(true);
+                  void getLastCollection(b.id).then(setLastCollection);
                   Animated.spring(successAnim, { toValue: 1, tension: 80, friction: 8, useNativeDriver: true }).start();
                 }
               }}
@@ -393,6 +424,7 @@ const styles = StyleSheet.create({
   expectedKgRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: Spacing.sm },
   expectedKgLabel: { color: Colors.textTertiary, fontSize: Typography.fontSize.xs },
   expectedKgValue: { color: Colors.primary, fontSize: Typography.fontSize.base, fontWeight: Typography.fontWeight.bold },
+  lastCollectionValue: { color: Colors.textSecondary, fontSize: Typography.fontSize.sm, fontWeight: Typography.fontWeight.medium },
 
   proceedBtn: {
     backgroundColor: Colors.primary, borderRadius: Radius.full,

@@ -63,9 +63,24 @@ export default function StopItem({ stop, onPress, onLongPress }: Props) {
             )}
           </View>
           
-          <View style={styles.actionBtn}>
-            <Text style={styles.actionBtnText}>{isDone ? '✓' : 'Scan'}</Text>
-          </View>
+          {isDone ? (
+            <View style={styles.actionBtn}>
+              <Text style={styles.actionBtnText}>✓</Text>
+            </View>
+          ) : (
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={styles.skipChip}
+                onPress={onLongPress}
+                accessibilityLabel="Skip this stop"
+              >
+                <Text style={styles.skipChipText}>Skip</Text>
+              </TouchableOpacity>
+              <View style={styles.actionBtn}>
+                <Text style={styles.actionBtnText}>Scan</Text>
+              </View>
+            </View>
+          )}
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -140,5 +155,20 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.bold,
-  }
+  },
+  actionRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  skipChip: {
+    paddingHorizontal: 12,
+    height: 44,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  skipChipText: {
+    color: Colors.danger,
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.bold,
+  },
 });
