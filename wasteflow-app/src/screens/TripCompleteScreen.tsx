@@ -32,7 +32,7 @@ type TripCompleteParams = {
 export default function TripCompleteScreen() {
   const navigation = useNavigation<any>();
   const routeParams = useRoute<RouteProp<TripCompleteParams, 'TripComplete'>>();
-  const { trip, route, stops } = routeParams.params;
+  const { trip, route, stops, employeeId, vehicleId } = routeParams.params;
 
   const [endOdometer, setEndOdometer] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -90,6 +90,8 @@ export default function TripCompleteScreen() {
         end_km: endKm,
         end_lat: loc?.latitude,
         end_lng: loc?.longitude,
+        vehicleId,
+        driverId: employeeId,
       });
 
       if (!success) {

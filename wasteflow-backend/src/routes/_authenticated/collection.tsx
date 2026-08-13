@@ -22,6 +22,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { captureGeo } from "@/lib/geo";
+import { createTrip, generateDailyBoard } from "@/lib/ops";
 import { kg, todayISO, formatTime, coords, pct, formatDateTime } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/collection")({
@@ -43,10 +44,26 @@ function CollectionPage() {
   const [status, setStatus] = useState("all");
   const [busy, setBusy] = useState<string | null>(null);
   const [km, setKm] = useState("");
+  const [newRouteId, setNewRouteId] = useState("");
+  const [newVehicleId, setNewVehicleId] = useState("");
+  const [newDriverId, setNewDriverId] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const routes = useQuery({
     queryKey: ["routes"],
     queryFn: async () => (await supabase.from("routes").select("*").order("route_code")).data ?? [],
+  });
+  const vehicles = useQuery({
+    queryKey: ["vehicles"],
+    queryFn: async () =>
+      (await supabase.from("vehicles").select("id, vehicle_number").eq("status", "active").order("vehicle_number"))
+        .data ?? [],
+  });
+  const drivers = useQuery({
+    queryKey: ["employees", "drivers"],
+    queryFn: async () =>
+      (await supabase.from("employees").select("id, full_name, assigned_route_id, assigned_vehicle_id").eq("role", "driver").eq("is_archived", false).order("full_name"))
+        .data ?? [],
   });
 
   const data = useQuery({
@@ -152,6 +169,12 @@ function CollectionPage() {
     } as never);
     setBusy(null);
     setKm("");
+    if (trip.vehicle_id && (km || trip.end_km)) {
+      await supabase
+        .from("vehicles")
+        .update({ odometer: km ? Number(km) : trip.end_km } as never)
+        .eq("id", trip.vehicle_id);
+    }
     if (error) toast.error(error.message);
     else {
       toast.success("Trip completed");
@@ -159,16 +182,78 @@ function CollectionPage() {
     }
   };
 
+  const createNewTrip = async () => {
+    if (!newRouteId) {
+      toast.error("Pick a route");
+      return;
+    }
+    setCreating(true);
+    try {
+      await createTrip({
+        trip_date: date,
+        route_id: newRouteId,
+        vehicle_id: newVehicleId || null,
+        driver_id: newDriverId || null,
+      });
+      toast.success("Trip created");
+      setNewRouteId("");
+      setNewVehicleId("");
+      setNewDriverId("");
+      void qc.invalidateQueries({ queryKey: ["collection"] });
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not create trip");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const generateBoard = async () => {
+    setCreating(true);
+    try {
+      const count = await generateDailyBoard(date, routeId === "all" ? null : routeId);
+      toast.success(`Scheduled ${count} stops for ${date}`);
+      void qc.invalidateQueries({ queryKey: ["collection"] });
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not generate the daily board");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const setStopStatus = async (row: any, next: string) => {
+    const collectedKg = next === "missed" || next === "pending" || next === "scheduled" ? 0 : Number(row.collected_kg ?? 0);
     const { error } = await supabase
       .from("daily_bwg_status")
-      .update({ status: next } as never)
+      .update({ status: next, collected_kg: collectedKg } as never)
       .eq("id", row.id);
-    if (error) toast.error(error.message);
-    else {
-      toast.success("Stop status updated");
-      void qc.invalidateQueries({ queryKey: ["collection"] });
+    if (error) {
+      toast.error(error.message);
+      return;
     }
+    const { data: existing } = await supabase
+      .from("collection_events")
+      .select("id")
+      .eq("bwg_id", row.bwg_id)
+      .eq("event_date", date)
+      .limit(1)
+      .maybeSingle();
+    if (existing?.id) {
+      await supabase
+        .from("collection_events")
+        .update({ status: next === "missed" ? "missed" : next, total_kg: collectedKg } as never)
+        .eq("id", existing.id);
+    } else if (next === "missed" || next === "collected" || next === "partially_collected") {
+      await supabase.from("collection_events").insert({
+        event_date: date,
+        bwg_id: row.bwg_id,
+        route_id: row.route_id,
+        status: next === "missed" ? "missed" : next,
+        total_kg: collectedKg,
+        remarks: `Updated from ERP status board`,
+      } as never);
+    }
+    toast.success("Stop status updated");
+    void qc.invalidateQueries({ queryKey: ["collection"] });
   };
 
   return (
@@ -211,10 +296,65 @@ function CollectionPage() {
         </TabsList>
 
         <TabsContent value="trips" className="space-y-3 pt-4">
+          <Card>
+            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
+              <div className="grid flex-1 gap-2 sm:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label>Route</Label>
+                  <Select value={newRouteId} onValueChange={setNewRouteId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select route" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(routes.data ?? []).map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.route_code} · {r.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Vehicle</Label>
+                  <Select value={newVehicleId} onValueChange={setNewVehicleId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Optional" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(vehicles.data ?? []).map((v) => (
+                        <SelectItem key={v.id} value={v.id}>
+                          {v.vehicle_number}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Driver</Label>
+                  <Select value={newDriverId} onValueChange={setNewDriverId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Optional" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(drivers.data ?? []).map((d) => (
+                        <SelectItem key={d.id} value={d.id}>
+                          {d.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Button disabled={creating} onClick={() => void createNewTrip()}>
+                {creating ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+                Create trip
+              </Button>
+            </CardContent>
+          </Card>
           {data.isLoading ? (
             <LoadingRows />
           ) : (data.data?.trips.length ?? 0) === 0 ? (
-            <EmptyState title="No trips for this date" description="Trips appear when a vehicle is assigned to a route." />
+            <EmptyState title="No trips for this date" description="Create a trip above, or start one from the driver app." />
           ) : (
             data.data!.trips.map((t: any) => (
               <Card key={t.id}>
@@ -268,6 +408,9 @@ function CollectionPage() {
             <CardHeader className="flex-row items-center justify-between gap-3">
               <CardTitle className="text-base">Stops on {date}</CardTitle>
               <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" disabled={creating} onClick={() => void generateBoard()}>
+                  Generate board
+                </Button>
                 <Progress value={totals.completion} className="w-28" />
                 <Select value={status} onValueChange={setStatus}>
                   <SelectTrigger className="w-[170px]">

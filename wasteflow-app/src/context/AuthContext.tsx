@@ -211,29 +211,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const url = result.url;
-      const hash = url.includes('#') ? url.split('#')[1] : url.split('?')[1] ?? '';
-      const params = new URLSearchParams(hash);
+      const query = url.split('#')[0].split('?')[1] ?? '';
+      const hash = url.includes('#') ? url.split('#')[1] : '';
+      const params = new URLSearchParams([query, hash].filter(Boolean).join('&'));
+      const code = params.get('code');
       const access_token = params.get('access_token');
       const refresh_token = params.get('refresh_token');
 
-      if (!access_token || !refresh_token) {
+      let sessionUser = null;
+      let nextSession = null;
+
+      if (code) {
+        const exchanged = await supabase.auth.exchangeCodeForSession(code);
+        if (exchanged.error || !exchanged.data.user) {
+          Alert.alert('Google sign-in failed', exchanged.error?.message ?? 'Could not create a session.');
+          return false;
+        }
+        sessionUser = exchanged.data.user;
+        nextSession = exchanged.data.session;
+      } else if (access_token && refresh_token) {
+        const sessionData = await supabase.auth.setSession({ access_token, refresh_token });
+        if (sessionData.error || !sessionData.data.user) {
+          Alert.alert('Google sign-in failed', sessionData.error?.message ?? 'Could not create a session.');
+          return false;
+        }
+        sessionUser = sessionData.data.user;
+        nextSession = sessionData.data.session;
+      } else {
         Alert.alert(
           'Google sign-in incomplete',
-          'Add wasteflow://auth/callback to Supabase Auth redirect URLs, or sign in with email.',
+          `Add this redirect URL in Supabase Auth: ${redirectTo}`,
         );
         return false;
       }
 
-      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-        access_token,
-        refresh_token,
-      });
-      if (sessionError || !sessionData.user) {
-        Alert.alert('Google sign-in failed', sessionError?.message ?? 'Could not create a session.');
-        return false;
-      }
-
-      return finalizeDriverSession(sessionData.user, sessionData.session);
+      return finalizeDriverSession(sessionUser, nextSession);
     } catch (e: any) {
       Alert.alert('Google sign-in failed', e?.message ?? 'Something went wrong.');
       return false;

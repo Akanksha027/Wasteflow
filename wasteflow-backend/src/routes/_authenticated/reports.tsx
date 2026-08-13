@@ -205,7 +205,7 @@ function ReportsPage() {
     <div>
       <PageHeader
         title="Reports & Analytics"
-        description="Filterable operational reports built on demo data. Export CSV or print a clean PDF-friendly page."
+        description="Filterable operational reports. Export CSV or print a clean PDF-friendly page."
         actions={
           <>
             <Button variant="outline" size="sm" onClick={() => downloadCsv(`${report}-report.csv`, rows)}>

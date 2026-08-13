@@ -1,4 +1,5 @@
--- Ensure every staff signup gets an employees row, and drivers can claim/link their record.
+-- Driver auth ↔ employee link + collection photo storage.
+-- Safe to re-run (CREATE OR REPLACE / IF NOT EXISTS / ON CONFLICT).
 
 CREATE OR REPLACE FUNCTION public.handle_new_user() RETURNS TRIGGER
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -20,7 +21,6 @@ BEGIN
   VALUES (NEW.id, chosen_role)
   ON CONFLICT DO NOTHING;
 
-  -- Operational roles need an employees row so the driver app can start trips.
   IF chosen_role IN ('driver', 'field_worker', 'supervisor') THEN
     IF NOT EXISTS (SELECT 1 FROM public.employees WHERE user_id = NEW.id) THEN
       emp_code := 'EMP-' || upper(substr(replace(NEW.id::text, '-', ''), 1, 6));
@@ -49,7 +49,6 @@ BEGIN
 END;
 $$;
 
--- Idempotent helper: return (or create / claim) the caller's employee record.
 CREATE OR REPLACE FUNCTION public.ensure_my_employee()
 RETURNS public.employees
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -83,7 +82,6 @@ BEGIN
     RETURN emp;
   END IF;
 
-  -- Prefer claiming an unlinked seed/demo employee with the same role.
   SELECT * INTO emp
   FROM public.employees
   WHERE user_id IS NULL
@@ -132,10 +130,39 @@ $$;
 GRANT EXECUTE ON FUNCTION public.ensure_my_employee() TO authenticated;
 REVOKE EXECUTE ON FUNCTION public.ensure_my_employee() FROM PUBLIC, anon;
 
--- One-time: link the known demo driver auth user to EMP-003 when present.
 UPDATE public.employees e
 SET user_id = p.id, updated_at = now()
 FROM public.profiles p
 WHERE e.employee_code = 'EMP-003'
   AND e.user_id IS NULL
   AND lower(p.email) = lower('akankshasingh0085@gmail.com');
+
+-- Collection evidence photos for the driver app
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'collection-photos',
+  'collection-photos',
+  true,
+  5242880,
+  ARRAY['image/jpeg', 'image/png', 'image/webp']
+)
+ON CONFLICT (id) DO UPDATE
+SET public = EXCLUDED.public,
+    file_size_limit = EXCLUDED.file_size_limit,
+    allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+DROP POLICY IF EXISTS "collection_photos_public_read" ON storage.objects;
+CREATE POLICY "collection_photos_public_read"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'collection-photos');
+
+DROP POLICY IF EXISTS "collection_photos_auth_insert" ON storage.objects;
+CREATE POLICY "collection_photos_auth_insert"
+ON storage.objects FOR INSERT TO authenticated
+WITH CHECK (bucket_id = 'collection-photos');
+
+DROP POLICY IF EXISTS "collection_photos_auth_update" ON storage.objects;
+CREATE POLICY "collection_photos_auth_update"
+ON storage.objects FOR UPDATE TO authenticated
+USING (bucket_id = 'collection-photos')
+WITH CHECK (bucket_id = 'collection-photos');

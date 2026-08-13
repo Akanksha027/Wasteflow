@@ -11,7 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useAuth, ROLE_LABELS, type AppRole } from "@/hooks/useAuth";
+import { syncUserRole } from "@/lib/ops";
 import { readQueue, flushQueue, clearQueue } from "@/lib/offline-queue";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
@@ -26,7 +28,7 @@ export const Route = createFileRoute("/_authenticated/settings")({
 });
 
 function SettingsPage() {
-  const { user, roles, primaryRole, signOut } = useAuth();
+  const { user, roles, primaryRole, isAdmin, signOut } = useAuth();
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
@@ -112,6 +114,7 @@ function SettingsPage() {
             <p className="text-xs text-muted-foreground">
               Active role: {primaryRole ? ROLE_LABELS[primaryRole] : "No role assigned yet"}
             </p>
+            {isAdmin ? <AdminRoleManager /> : null}
           </CardContent>
         </Card>
 
@@ -153,10 +156,9 @@ function SettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Demo data</CardTitle>
+            <CardTitle className="text-base">Session</CardTitle>
             <CardDescription>
-              This workspace is pre-seeded with sample routes, generators, employees, vehicles and collections so the
-              dashboard and reports are populated. Records you create are stored alongside them.
+              Signed in against the live Supabase project. New users are created by an admin, not public signup.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -166,6 +168,57 @@ function SettingsPage() {
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+function AdminRoleManager() {
+  const accounts = useQuery({
+    queryKey: ["admin-roles"],
+    queryFn: async () => {
+      const [{ data: profiles }, { data: roleRows }] = await Promise.all([
+        supabase.from("profiles").select("id, email, full_name").order("email"),
+        supabase.from("user_roles").select("user_id, role"),
+      ]);
+      const roleByUser = new Map((roleRows ?? []).map((r) => [r.user_id, r.role]));
+      return (profiles ?? []).map((p) => ({ ...p, role: roleByUser.get(p.id) ?? "field_worker" }));
+    },
+  });
+
+  const setRole = async (userId: string, role: string) => {
+    try {
+      await syncUserRole(userId, role);
+      toast.success("Role updated");
+      void accounts.refetch();
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not update role");
+    }
+  };
+
+  return (
+    <div className="space-y-2 pt-2">
+      <Separator />
+      <p className="text-sm font-medium">Grant roles</p>
+      {(accounts.data ?? []).map((p) => (
+        <div key={p.id} className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm">{p.full_name || p.email}</p>
+            <p className="truncate text-xs text-muted-foreground">{p.email}</p>
+          </div>
+          <Select value={p.role} onValueChange={(v) => void setRole(p.id, v)}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(["admin", "supervisor", "driver", "field_worker"] as AppRole[]).map((r) => (
+                <SelectItem key={r} value={r}>
+                  {ROLE_LABELS[r]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ))}
     </div>
   );
 }

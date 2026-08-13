@@ -23,6 +23,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth, ROLE_LABELS, type AppRole } from "@/hooks/useAuth";
 import { useSaveRow, useDeleteRow, qk } from "@/lib/api";
+import { syncUserRole } from "@/lib/ops";
 import { formatDate, kg, downloadCsv, daysAgoISO } from "@/lib/format";
 import { toast } from "sonner";
 
@@ -117,7 +118,7 @@ function EmployeesPage() {
         .ilike("email", authEmail)
         .maybeSingle();
       if (!profile?.id) {
-        toast.error("No auth profile found for that email. Have the user sign up on /auth first.");
+        toast.error("No auth profile found for that email. The user must sign in (or Google) once first.");
         return;
       }
       userId = profile.id;
@@ -144,7 +145,18 @@ function EmployeesPage() {
           notes: form["notes"] || null,
         },
       },
-      { onSuccess: () => setOpen(false) },
+      {
+        onSuccess: async () => {
+          if (userId && form["role"]) {
+            try {
+              await syncUserRole(userId, form["role"]);
+            } catch (err: any) {
+              toast.error(err?.message ?? "Employee saved, but role grant failed.");
+            }
+          }
+          setOpen(false);
+        },
+      },
     );
   };
 
@@ -164,7 +176,7 @@ function EmployeesPage() {
     <div>
       <PageHeader
         title="Employees"
-        description="Demo staff records — supervisors, drivers and field workers with daily assignments."
+        description="Supervisors, drivers and field workers with route and vehicle assignments."
         actions={
           <>
             <Button

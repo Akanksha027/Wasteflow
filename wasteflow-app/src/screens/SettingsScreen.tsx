@@ -124,7 +124,7 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>App Info</Text>
           <InfoRow icon="📱" label="App Version" value="1.0.0" />
-          <InfoRow icon="☁️" label="Backend" value="Lovable Cloud / Supabase" />
+          <InfoRow icon="☁️" label="Backend" value="Supabase" />
         </View>
 
         <View style={styles.section}>

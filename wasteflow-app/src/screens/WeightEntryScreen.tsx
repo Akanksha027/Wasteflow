@@ -50,8 +50,7 @@ export default function WeightEntryScreen() {
       const relevant = types.filter((wt) =>
         bwg.waste_type_codes?.includes(wt.code)
       );
-      // If no specific types, show first 3
-      setWasteTypes(relevant.length > 0 ? relevant : types.slice(0, 3));
+      setWasteTypes(relevant.length > 0 ? relevant : types);
     }).finally(() => setLoadingTypes(false));
   }, []);
 

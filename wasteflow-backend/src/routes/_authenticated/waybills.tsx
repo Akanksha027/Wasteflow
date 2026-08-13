@@ -112,7 +112,7 @@ function WaybillsPage() {
     <div>
       <PageHeader
         title="Waybills"
-        description="Demo transport documents. Link a trip to auto-fill quantity, vehicle and odometer, then print."
+        description="Transport documents. Link a trip to auto-fill quantity, vehicle and odometer, then print."
         actions={
           <>
             <Button
@@ -242,7 +242,7 @@ function WaybillsPage() {
               save.mutate(
                 {
                   values: {
-                    waybill_number: nextNumber,
+                    waybill_number: `WB-${todayISO().replace(/-/g, "")}-${crypto.randomUUID().slice(0, 4).toUpperCase()}`,
                     waybill_date: form["waybill_date"],
                     vehicle_id: form["vehicle_id"] || null,
                     driver_id: form["driver_id"] || null,
@@ -254,6 +254,9 @@ function WaybillsPage() {
                     stops_count: Number(form["stops_count"] || 0),
                     odometer_start: form["odometer_start"] ? Number(form["odometer_start"]) : null,
                     odometer_end: form["odometer_end"] ? Number(form["odometer_end"]) : null,
+                    start_time: form["start_time"] || null,
+                    end_time: form["end_time"] || null,
+                    waste_types: ["WET", "DRY", "REJ"],
                     authorized_by: form["authorized_by"] || null,
                     status: form["status"],
                   },
@@ -277,6 +280,8 @@ function WaybillsPage() {
                     total_quantity_kg: String(trip?.total_collected_kg ?? f["total_quantity_kg"] ?? ""),
                     odometer_start: trip?.start_km == null ? "" : String(trip.start_km),
                     odometer_end: trip?.end_km == null ? "" : String(trip.end_km),
+                    start_time: trip?.started_at ?? "",
+                    end_time: trip?.ended_at ?? "",
                   }));
                 }}
               >
@@ -376,7 +381,7 @@ function WaybillsPage() {
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Waybill {printing?.waybill_number}</DialogTitle>
-            <DialogDescription>Printable transport document (demo data).</DialogDescription>
+            <DialogDescription>Printable transport document.</DialogDescription>
           </DialogHeader>
           {printing ? <PrintableWaybill waybill={printing} /> : null}
           <DialogFooter className="no-print">

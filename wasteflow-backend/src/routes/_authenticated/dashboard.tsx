@@ -35,6 +35,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { kg, tonnes, pct, todayISO, daysAgoISO, formatDateTime, coords, currency } from "@/lib/format";
+import { generateDailyBoard } from "@/lib/ops";
 import { qk } from "@/lib/api";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -66,6 +67,11 @@ function DashboardPage() {
   const dash = useQuery({
     queryKey: ["dashboard", from, to, routeId],
     queryFn: async () => {
+      try {
+        await generateDailyBoard(todayISO());
+      } catch {
+        // Board generation is best-effort; dashboard data still loads.
+      }
       const eventQuery = supabase
         .from("collection_events")
         .select("*, bwgs(name, bwg_code), routes(route_code, name), vehicles(vehicle_number)")
@@ -172,7 +178,7 @@ function DashboardPage() {
     <div>
       <PageHeader
         title="Operations Dashboard"
-        description="Demo data — live view of today's collection performance across all routes."
+        description="Live collection performance across all routes. Today's board is generated automatically."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-[150px]" />

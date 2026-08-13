@@ -32,6 +32,12 @@ export async function saveLocalTrip(trip: CollectionTrip): Promise<void> {
   await write(TRIPS_KEY, next.slice(0, 20));
 }
 
+export async function updateLocalTrip(id: string, patch: Partial<CollectionTrip>): Promise<void> {
+  const trips = await read<CollectionTrip[]>(TRIPS_KEY, []);
+  const next = trips.map((t) => (t.id === id ? { ...t, ...patch } : t));
+  await write(TRIPS_KEY, next);
+}
+
 export async function getLocalTodayTrip(routeId: string, driverId: string): Promise<CollectionTrip | null> {
   const today = new Date().toISOString().split('T')[0];
   const trips = await read<CollectionTrip[]>(TRIPS_KEY, []);

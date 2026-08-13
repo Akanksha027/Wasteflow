@@ -3,6 +3,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, Rea
 import NetInfo from '@react-native-community/netinfo';
 import { supabase } from '../lib/supabase';
 import * as offlineQueue from '../services/offlineQueue';
+import { uploadCollectionPhoto } from '../services/photo';
 import { OfflineQueueItem } from '../types';
 
 interface OfflineContextValue {
@@ -35,7 +36,10 @@ export function OfflineQueueProvider({ children }: { children: ReactNode }) {
     try {
       switch (item.type) {
         case 'collection': {
-          const { event, items, status, gps } = item.payload;
+          const { event, items, status, gps, photoUri } = item.payload;
+          if (photoUri && !event.photo_url) {
+            event.photo_url = await uploadCollectionPhoto(photoUri, event.id);
+          }
           const { error } = await supabase.from('collection_events').insert(event);
           if (error) return false;
           if (items?.length) {
@@ -76,24 +80,37 @@ export function OfflineQueueProvider({ children }: { children: ReactNode }) {
           return !error;
         }
         case 'trip_start': {
-          const { error } = await supabase.from('collection_trips').upsert(item.payload, {
+          const trip = item.payload.trip ?? item.payload;
+          const gps = item.payload.gps;
+          const { error } = await supabase.from('collection_trips').upsert(trip, {
             onConflict: 'id',
           });
-          return !error;
+          if (error) return false;
+          if (gps) await supabase.from('gps_events').insert(gps);
+          return true;
         }
         case 'trip_end': {
-          const { error } = await supabase
+          const { data, error } = await supabase
             .from('collection_trips')
             .update(item.payload.updates)
-            .eq('id', item.payload.tripId);
-          return !error;
+            .eq('id', item.payload.tripId)
+            .select('id, vehicle_id');
+          if (error || !data?.length) return false;
+          if (item.payload.vehicleId || data[0]?.vehicle_id) {
+            await supabase
+              .from('vehicles')
+              .update({ odometer: item.payload.end_km ?? item.payload.updates?.end_km })
+              .eq('id', item.payload.vehicleId ?? data[0].vehicle_id);
+          }
+          if (item.payload.gps) await supabase.from('gps_events').insert(item.payload.gps);
+          return true;
         }
         case 'gps_event': {
           const { error } = await supabase.from('gps_events').insert(item.payload);
           return !error;
         }
         default:
-          return true;
+          return false;
       }
     } catch {
       return false;

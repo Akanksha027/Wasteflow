@@ -27,8 +27,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useSaveRow, useDeleteRow, qk } from "@/lib/api";
+import { syncBwgRouteStop } from "@/lib/ops";
 import { kg, formatDate, downloadCsv } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/bwgs")({
@@ -88,6 +90,7 @@ function BwgPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<Record<string, string>>(empty);
+  const [wasteCodes, setWasteCodes] = useState<string[]>([]);
   const [confirm, setConfirm] = useState<any>(null);
 
   const routes = useQuery({
@@ -98,6 +101,11 @@ function BwgPage() {
     queryKey: ["employees", "supervisors"],
     queryFn: async () =>
       (await supabase.from("employees").select("*").in("role", ["supervisor", "admin"]).order("full_name")).data ?? [],
+  });
+  const wasteTypes = useQuery({
+    queryKey: qk.wasteTypes,
+    queryFn: async () =>
+      (await supabase.from("waste_types").select("code, name").eq("is_active", true).order("code")).data ?? [],
   });
   const bwgs = useQuery({
     queryKey: qk.bwgs,
@@ -130,12 +138,14 @@ function BwgPage() {
   const openNew = () => {
     const next = String((bwgs.data?.length ?? 0) + 1).padStart(3, "0");
     setEditing(null);
+    setWasteCodes([]);
     setForm({ ...empty, bwg_code: `BWG-${next}`, qr_code: `WF-BWG-${next}` });
     setOpen(true);
   };
 
   const openEdit = (row: any) => {
     setEditing(row);
+    setWasteCodes(Array.isArray(row.waste_type_codes) ? row.waste_type_codes : []);
     setForm({
       ...empty,
       ...Object.fromEntries(Object.keys(empty).map((k) => [k, row[k] == null ? "" : String(row[k])])),
@@ -164,13 +174,20 @@ function BwgPage() {
       status: form["status"],
       onboarding_date: form["onboarding_date"] || null,
       notes: form["notes"] || null,
+      waste_type_codes: wasteCodes,
     };
     save.mutate(
       { id: editing?.id, values },
       {
-        onSuccess: () => {
+        onSuccess: async (id) => {
+          try {
+            await syncBwgRouteStop(id, values.route_id, editing?.route_id);
+          } catch (err: any) {
+            toast.error(err?.message ?? "Saved generator, but route stop sync failed.");
+          }
           setOpen(false);
           void qc.invalidateQueries({ queryKey: qk.bwgs });
+          void qc.invalidateQueries({ queryKey: ["route_stops"] });
         },
       },
     );
@@ -178,7 +195,9 @@ function BwgPage() {
 
   const archive = async (row: any) => {
     await supabase.from("bwgs").update({ is_archived: true, status: "inactive" } as never).eq("id", row.id);
+    await supabase.from("route_stops").delete().eq("bwg_id", row.id);
     void qc.invalidateQueries({ queryKey: qk.bwgs });
+    void qc.invalidateQueries({ queryKey: ["route_stops"] });
   };
 
   const field = (key: string, label: string, props: Record<string, unknown> = {}) => (
@@ -197,7 +216,7 @@ function BwgPage() {
     <div>
       <PageHeader
         title="Bulk Waste Generators"
-        description="Demo master data — every generator carries a unique QR code used by field workers."
+        description="Every generator carries a unique QR code used by field workers. Assigning a route also adds the ordered stop."
         actions={
           <>
             <Button
@@ -357,6 +376,29 @@ function BwgPage() {
             {field("latitude", "Latitude", { inputMode: "decimal" })}
             {field("longitude", "Longitude", { inputMode: "decimal" })}
             {field("daily_expected_kg", "Daily expected waste (kg)", { type: "number", step: "0.01", min: "0" })}
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Waste types collected</Label>
+              <div className="flex flex-wrap gap-2">
+                {(wasteTypes.data ?? []).map((wt: any) => {
+                  const on = wasteCodes.includes(wt.code);
+                  return (
+                    <Button
+                      key={wt.code}
+                      type="button"
+                      size="sm"
+                      variant={on ? "default" : "outline"}
+                      onClick={() =>
+                        setWasteCodes((codes) =>
+                          on ? codes.filter((c) => c !== wt.code) : [...codes, wt.code],
+                        )
+                      }
+                    >
+                      {wt.code} · {wt.name}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
             <div className="space-y-1.5">
               <Label>Collection frequency</Label>
               <Select value={form["frequency"] ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, frequency: v }))}>

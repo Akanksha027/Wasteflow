@@ -46,7 +46,7 @@ type Step = "scan" | "verify" | "checklist" | "done";
 
 function ScannerPage() {
   const qc = useQueryClient();
-  const { isManager } = useAuth();
+  const { isManager, user } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [cameraOn, setCameraOn] = useState(false);
@@ -187,11 +187,38 @@ function ScannerPage() {
     }
     setSubmitting(true);
     const now = new Date().toISOString();
+    let operatorId: string | null = null;
+    let tripId: string | null = null;
+    let vehicleId: string | null = null;
+    if (user?.id) {
+      const { data: emp } = await supabase
+        .from("employees")
+        .select("id, assigned_vehicle_id, assigned_route_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      operatorId = emp?.id ?? null;
+      if (operatorId) {
+        const { data: trip } = await supabase
+          .from("collection_trips")
+          .select("id, vehicle_id")
+          .eq("trip_date", todayISO())
+          .eq("driver_id", operatorId)
+          .in("status", ["in_progress", "not_started"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        tripId = trip?.id ?? null;
+        vehicleId = trip?.vehicle_id ?? emp?.assigned_vehicle_id ?? null;
+      }
+    }
     const payload = {
       event: {
         event_date: todayISO(),
         bwg_id: bwg.id,
         route_id: bwg.route_id,
+        operator_id: operatorId,
+        trip_id: tripId,
+        vehicle_id: vehicleId,
         scanned_at: now,
         completed_at: now,
         latitude: geo?.latitude ?? null,
@@ -226,10 +253,18 @@ function ScannerPage() {
       await supabase.from("gps_events").insert({
         event_type: "collection_completed",
         bwg_id: bwg.id,
+        trip_id: tripId,
+        vehicle_id: vehicleId,
+        employee_id: operatorId,
         latitude: geo?.latitude ?? null,
         longitude: geo?.longitude ?? null,
         accuracy_m: geo?.accuracy_m ?? null,
       } as never);
+      if (tripId) {
+        const { data: events } = await supabase.from("collection_events").select("total_kg").eq("trip_id", tripId);
+        const total = (events ?? []).reduce((sum, e) => sum + Number(e.total_kg ?? 0), 0);
+        await supabase.from("collection_trips").update({ total_collected_kg: total } as never).eq("id", tripId);
+      }
       setResult({ synced: true });
       toast.success("Collection submitted");
       void qc.invalidateQueries();
@@ -305,7 +340,7 @@ function ScannerPage() {
                   <Search className="size-4" /> Find
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">Demo codes: WF-BWG-001 … WF-BWG-015</p>
+              <p className="text-xs text-muted-foreground">Search by QR code or BWG code</p>
             </div>
           </CardContent>
         </Card>

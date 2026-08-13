@@ -86,7 +86,7 @@ function WasteTypesPage() {
     <div>
       <PageHeader
         title="Waste Types & Quantities"
-        description="Configurable waste streams. Quantities aggregate every collection item in the selected period (demo data)."
+        description="Configurable waste streams. Quantities aggregate every collection item in the selected period."
         actions={
           <>
             <Button

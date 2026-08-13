@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { todayISO } from "@/lib/format";
 import {
   LayoutDashboard,
   QrCode,
@@ -96,6 +99,35 @@ function SyncStatus() {
       {online ? <RefreshCw className={cn("size-4", syncing && "animate-spin")} /> : <CloudOff className="size-4" />}
       {online ? `Sync ${pending}` : `Offline${pending ? ` · ${pending} queued` : ""}`}
     </Button>
+  );
+}
+
+function AlertsBell() {
+  const alerts = useQuery({
+    queryKey: ["ops-alerts", todayISO()],
+    queryFn: async () => {
+      const [missed, diesel] = await Promise.all([
+        supabase
+          .from("daily_bwg_status")
+          .select("id", { count: "exact", head: true })
+          .eq("status_date", todayISO())
+          .eq("status", "missed"),
+        supabase.from("diesel_logs").select("id", { count: "exact", head: true }).eq("is_abnormal", true).eq("log_date", todayISO()),
+      ]);
+      return (missed.count ?? 0) + (diesel.count ?? 0);
+    },
+    refetchInterval: 60_000,
+  });
+  const count = alerts.data ?? 0;
+  return (
+    <Link
+      to="/collection"
+      className="relative rounded-md p-2 hover:bg-secondary"
+      aria-label={count ? `${count} operational alerts` : "No operational alerts"}
+    >
+      <Bell className="size-4.5" />
+      {count > 0 ? <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-accent" /> : null}
+    </Link>
   );
 }
 
@@ -199,14 +231,7 @@ export function AppLayout() {
           <p className="hidden text-sm text-muted-foreground sm:block">{today}</p>
           <div className="ml-auto flex items-center gap-2">
             <SyncStatus />
-            <Link
-              to="/collection"
-              className="relative rounded-md p-2 hover:bg-secondary"
-              aria-label="Operational alerts"
-            >
-              <Bell className="size-4.5" />
-              <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-accent" />
-            </Link>
+            <AlertsBell />
             <div className="hidden text-right sm:block">
               <p className="max-w-[160px] truncate text-xs font-medium">{user?.email}</p>
               <p className="text-[11px] text-muted-foreground">

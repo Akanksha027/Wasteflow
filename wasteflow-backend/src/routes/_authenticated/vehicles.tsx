@@ -117,7 +117,7 @@ function VehiclesPage() {
     <div>
       <PageHeader
         title="Vehicles"
-        description="Demo fleet — capacity, compliance dates and driver assignment. Tap a row for trip history."
+        description="Fleet capacity, compliance dates and driver assignment. Tap a row for trip history."
         actions={
           <>
             <Button

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Trash2, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, Pencil } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, LoadingRows, EmptyState } from "@/components/common/PageHeader";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
@@ -39,6 +39,7 @@ export const Route = createFileRoute("/_authenticated/diesel")({
 function DieselPage() {
   const { isManager, isAdmin, user } = useAuth();
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<any>(null);
   const [confirm, setConfirm] = useState<any>(null);
   const [from, setFrom] = useState(daysAgoISO(30));
   const [to, setTo] = useState(todayISO());
@@ -111,7 +112,7 @@ function DieselPage() {
     <div>
       <PageHeader
         title="Diesel Log"
-        description="Demo fuel entries. Amount and km/litre are calculated automatically; poor efficiency is flagged."
+        description="Fuel entries. Amount and km/litre are calculated automatically; poor efficiency is flagged."
         actions={
           <>
             <Button
@@ -136,7 +137,23 @@ function DieselPage() {
               Export CSV
             </Button>
             {isManager ? (
-              <Button size="sm" onClick={() => setOpen(true)}>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setEditing(null);
+                  setForm({
+                    log_date: todayISO(),
+                    vehicle_id: "",
+                    opening_odometer: "",
+                    closing_odometer: "",
+                    litres: "",
+                    rate_per_litre: "",
+                    fuel_station: "",
+                    bill_number: "",
+                  });
+                  setOpen(true);
+                }}
+              >
                 <Plus className="size-4" /> Add entry
               </Button>
             ) : null}
@@ -220,13 +237,36 @@ function DieselPage() {
                       {r.fuel_station ?? ""}
                     </TableCell>
                     <TableCell className="text-right">
-                      {isAdmin ? (
-                        <Button variant="ghost" size="icon" aria-label="Delete entry" onClick={() => setConfirm(r)}>
-                          <Trash2 className="size-4 text-destructive" />
-                        </Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
+                      <div className="flex justify-end">
+                        {isManager ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Edit entry"
+                            onClick={() => {
+                              setEditing(r);
+                              setForm({
+                                log_date: r.log_date ?? todayISO(),
+                                vehicle_id: r.vehicle_id ?? "",
+                                opening_odometer: r.opening_odometer == null ? "" : String(r.opening_odometer),
+                                closing_odometer: r.closing_odometer == null ? "" : String(r.closing_odometer),
+                                litres: r.litres == null ? "" : String(r.litres),
+                                rate_per_litre: r.rate_per_litre == null ? "" : String(r.rate_per_litre),
+                                fuel_station: r.fuel_station ?? "",
+                                bill_number: r.bill_number ?? "",
+                              });
+                              setOpen(true);
+                            }}
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                        ) : null}
+                        {isAdmin ? (
+                          <Button variant="ghost" size="icon" aria-label="Delete entry" onClick={() => setConfirm(r)}>
+                            <Trash2 className="size-4 text-destructive" />
+                          </Button>
+                        ) : null}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -239,7 +279,7 @@ function DieselPage() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Add diesel entry</DialogTitle>
+            <DialogTitle>{editing ? "Edit diesel entry" : "Add diesel entry"}</DialogTitle>
             <DialogDescription>
               Amount = litres × rate. Efficiency below 2.5 km/L is flagged for review.
             </DialogDescription>
@@ -250,6 +290,7 @@ function DieselPage() {
               e.preventDefault();
               save.mutate(
                 {
+                  id: editing?.id,
                   values: {
                     log_date: form["log_date"],
                     vehicle_id: form["vehicle_id"],
@@ -268,6 +309,7 @@ function DieselPage() {
                 {
                   onSuccess: () => {
                     setOpen(false);
+                    setEditing(null);
                     setForm((f) => ({ ...f, litres: "", rate_per_litre: "", bill_number: "" }));
                   },
                 },

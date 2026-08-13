@@ -19,8 +19,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { useSaveRow, useDeleteRow, qk } from "@/lib/api";
+import { generateDailyBoard } from "@/lib/ops";
 import { kg, todayISO, pct } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/routes")({
@@ -43,6 +51,8 @@ function RoutesPage() {
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({ route_code: "", name: "", ward: "", description: "" });
   const [confirm, setConfirm] = useState<any>(null);
+  const [addBwgId, setAddBwgId] = useState("");
+  const [boardBusy, setBoardBusy] = useState(false);
 
   const routes = useQuery({
     queryKey: qk.routes,
@@ -73,8 +83,62 @@ function RoutesPage() {
     },
   });
 
+  const bwgs = useQuery({
+    queryKey: qk.bwgs,
+    queryFn: async () =>
+      (await supabase.from("bwgs").select("id, name, bwg_code").eq("is_archived", false).order("bwg_code")).data ?? [],
+  });
+
   const save = useSaveRow("routes", [qk.routes]);
   const remove = useDeleteRow("routes", [qk.routes]);
+
+  const availableBwgs = (bwgs.data ?? []).filter(
+    (b) => !(stops.data ?? []).some((s: any) => s.bwg_id === b.id),
+  );
+
+  const addStop = async () => {
+    if (!activeRoute || !addBwgId) return;
+    const nextOrder = (stops.data?.length ?? 0) + 1;
+    const { error } = await supabase.from("route_stops").insert({
+      route_id: activeRoute,
+      bwg_id: addBwgId,
+      stop_order: nextOrder,
+    } as never);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    await supabase.from("bwgs").update({ route_id: activeRoute } as never).eq("id", addBwgId);
+    setAddBwgId("");
+    toast.success("Stop added");
+    void qc.invalidateQueries({ queryKey: ["route_stops"] });
+    void qc.invalidateQueries({ queryKey: qk.bwgs });
+  };
+
+  const removeStop = async (stop: any) => {
+    const { error } = await supabase.from("route_stops").delete().eq("id", stop.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Stop removed");
+    void qc.invalidateQueries({ queryKey: ["route_stops"] });
+  };
+
+  const generateBoard = async () => {
+    if (!activeRoute) return;
+    setBoardBusy(true);
+    try {
+      const count = await generateDailyBoard(todayISO(), activeRoute);
+      toast.success(`Scheduled ${count} stops for today`);
+      void qc.invalidateQueries({ queryKey: ["route_stops"] });
+      void qc.invalidateQueries({ queryKey: ["collection"] });
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not generate today's board");
+    } finally {
+      setBoardBusy(false);
+    }
+  };
 
   const move = async (index: number, dir: -1 | 1) => {
     const list = stops.data ?? [];
@@ -136,6 +200,11 @@ function RoutesPage() {
               {completed}/{stops.data?.length ?? 0}
               <Progress value={completion} className="w-24" />
               {completion}%
+              {isManager ? (
+                <Button size="sm" variant="outline" disabled={boardBusy || !activeRoute} onClick={() => void generateBoard()}>
+                  Generate today
+                </Button>
+              ) : null}
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -157,30 +226,59 @@ function RoutesPage() {
                   </div>
                   <StatusBadge status={s.today?.status ?? "pending"} />
                   {isManager ? (
-                    <div className="flex flex-col">
+                    <div className="flex items-center">
+                      <div className="flex flex-col">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Move stop up"
+                          disabled={i === 0}
+                          onClick={() => void move(i, -1)}
+                        >
+                          <ArrowUp className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Move stop down"
+                          disabled={i === (stops.data?.length ?? 0) - 1}
+                          onClick={() => void move(i, 1)}
+                        >
+                          <ArrowDown className="size-4" />
+                        </Button>
+                      </div>
                       <Button
                         variant="ghost"
                         size="icon"
-                        aria-label="Move stop up"
-                        disabled={i === 0}
-                        onClick={() => void move(i, -1)}
+                        aria-label="Remove stop"
+                        onClick={() => void removeStop(s)}
                       >
-                        <ArrowUp className="size-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Move stop down"
-                        disabled={i === (stops.data?.length ?? 0) - 1}
-                        onClick={() => void move(i, 1)}
-                      >
-                        <ArrowDown className="size-4" />
+                        <Trash2 className="size-4 text-destructive" />
                       </Button>
                     </div>
                   ) : null}
                 </div>
               ))
             )}
+            {isManager && activeRoute ? (
+              <div className="flex items-center gap-2 pt-2">
+                <Select value={addBwgId} onValueChange={setAddBwgId}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Add a generator stop" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableBwgs.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.bwg_code} · {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" disabled={!addBwgId} onClick={() => void addStop()}>
+                  Add stop
+                </Button>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 

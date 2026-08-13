@@ -2,8 +2,11 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? 'https://zgyesgpvwpjbcwrzpoaj.supabase.co';
-const SUPABASE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? 'sb_publishable_LOUXmeUTBAfxYfx9o7INOg_nT6eri6F';
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? 'https://elbbxqrkriezcyhqvfww.supabase.co';
+const SUPABASE_KEY =
+  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
+  'sb_publishable_0CZcc3nLwXeofBmHbb89jw_3XjMfo44';
 
 // The new Supabase publishable-key format (sb_publishable_...) is an opaque
 // string, not a JWT. The JS client sets "Authorization: Bearer <key>" by default,

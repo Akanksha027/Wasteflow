@@ -17,6 +17,7 @@ import {
   newId,
   saveLocalEvent,
   saveLocalTrip,
+  updateLocalTrip,
 } from '../services/localCache';
 import { uploadCollectionPhoto } from '../services/photo';
 import * as offlineQueue from '../services/offlineQueue';
@@ -46,7 +47,9 @@ export async function signOut() {
 }
 
 export async function resetPassword(email: string) {
-  return supabase.auth.resetPasswordForEmail(email);
+  return supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: 'https://wasteflow-backend.vercel.app/auth',
+  });
 }
 
 export async function getUserRole(userId: string): Promise<string | null> {
@@ -73,24 +76,7 @@ export async function getDriverEmployee(userId: string): Promise<Employee | null
     console.warn('getDriverEmployee error:', error.message);
     return null;
   }
-  if (data) return data;
-
-  const { data: fallback, error: fallbackError } = await supabase
-    .from('employees')
-    .select('*')
-    .eq('role', 'driver')
-    .is('user_id', null)
-    .eq('is_archived', false)
-    .eq('status', 'active')
-    .order('employee_code')
-    .limit(1)
-    .maybeSingle();
-
-  if (fallbackError) {
-    console.warn('getDriverEmployee fallback error:', fallbackError.message);
-    return null;
-  }
-  return fallback;
+  return data;
 }
 
 export async function ensureMyEmployee(): Promise<Employee | null> {
@@ -141,7 +127,7 @@ export async function getDriverRoutes(driverEmployeeId: string): Promise<Route[]
     return data ?? [];
   }
 
-  return getAllActiveRoutes();
+  return [];
 }
 
 export async function getAllActiveRoutes(): Promise<Route[]> {
@@ -257,12 +243,35 @@ export async function startTrip(params: {
   const { data, error } = await supabase.from('collection_trips').insert(row).select().single();
   if (!error && data) {
     await saveLocalTrip(data);
+    if (params.start_lat != null && params.start_lng != null) {
+      await supabase.from('gps_events').insert({
+        event_type: 'trip_start',
+        trip_id: data.id,
+        vehicle_id: params.vehicle_id,
+        employee_id: params.driver_id,
+        latitude: params.start_lat,
+        longitude: params.start_lng,
+        recorded_at: new Date().toISOString(),
+      });
+    }
     return data;
   }
 
   const local: CollectionTrip = { id: newId(), ...row };
   await saveLocalTrip(local);
-  await offlineQueue.enqueue({ type: 'trip_start', payload: local });
+  const gps =
+    params.start_lat != null && params.start_lng != null
+      ? {
+          event_type: 'trip_start',
+          trip_id: local.id,
+          vehicle_id: params.vehicle_id,
+          employee_id: params.driver_id,
+          latitude: params.start_lat,
+          longitude: params.start_lng,
+          recorded_at: new Date().toISOString(),
+        }
+      : null;
+  await offlineQueue.enqueue({ type: 'trip_start', payload: { trip: local, gps } });
   if (error && !isOfflineError(error)) {
     console.warn('startTrip error:', error.message);
   }
@@ -274,20 +283,65 @@ export async function completeTrip(params: {
   end_km: number;
   end_lat?: number;
   end_lng?: number;
+  vehicleId?: string | null;
+  driverId?: string | null;
 }): Promise<boolean> {
   const updates = {
-    status: 'completed',
+    status: 'completed' as const,
     ended_at: new Date().toISOString(),
     end_km: params.end_km,
     end_lat: params.end_lat ?? null,
     end_lng: params.end_lng ?? null,
   };
-  const { error } = await supabase.from('collection_trips').update(updates).eq('id', params.tripId);
-  if (!error) return true;
+  const { data, error } = await supabase
+    .from('collection_trips')
+    .update(updates)
+    .eq('id', params.tripId)
+    .select('*')
+    .maybeSingle();
 
+  if (!error && data) {
+    await saveLocalTrip(data);
+    if (params.end_lat != null && params.end_lng != null) {
+      await supabase.from('gps_events').insert({
+        event_type: 'trip_end',
+        trip_id: params.tripId,
+        vehicle_id: params.vehicleId ?? data.vehicle_id ?? null,
+        employee_id: params.driverId ?? data.driver_id ?? null,
+        latitude: params.end_lat,
+        longitude: params.end_lng,
+        recorded_at: new Date().toISOString(),
+      });
+    }
+    const vehicleId = params.vehicleId ?? data.vehicle_id;
+    if (vehicleId) {
+      const { error: odoErr } = await supabase.rpc('update_my_vehicle_odometer', {
+        p_vehicle_id: vehicleId,
+        p_km: params.end_km,
+      });
+      if (odoErr) {
+        await supabase.from('vehicles').update({ odometer: params.end_km }).eq('id', vehicleId);
+      }
+    }
+    return true;
+  }
+
+  await updateLocalTrip(params.tripId, updates);
+  const gps =
+    params.end_lat != null && params.end_lng != null
+      ? {
+          event_type: 'trip_end',
+          trip_id: params.tripId,
+          vehicle_id: params.vehicleId ?? null,
+          employee_id: params.driverId ?? null,
+          latitude: params.end_lat,
+          longitude: params.end_lng,
+          recorded_at: new Date().toISOString(),
+        }
+      : null;
   await offlineQueue.enqueue({
     type: 'trip_end',
-    payload: { tripId: params.tripId, updates },
+    payload: { tripId: params.tripId, updates, vehicleId: params.vehicleId, end_km: params.end_km, gps },
   });
   return true;
 }
@@ -424,7 +478,7 @@ export async function submitCollectionBundle(params: {
 
   const gps = params.location
     ? {
-        event_type: params.status === 'missed' ? 'stop_skipped' : 'scan',
+        event_type: params.status === 'missed' ? 'stop_skipped' : 'collection_completed',
         trip_id: params.tripId,
         bwg_id: params.bwgId,
         vehicle_id: params.vehicleId,
@@ -451,7 +505,7 @@ export async function submitCollectionBundle(params: {
   await saveLocalEvent(event as CollectionEvent);
   await offlineQueue.enqueue({
     type: 'collection',
-    payload: { event, items, status, gps },
+    payload: { event, items, status, gps, photoUri: params.photoUri ?? null },
   });
   return { id: eventId, queued: true };
 }

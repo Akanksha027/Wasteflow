@@ -14,6 +14,7 @@
       "backgroundColor": "#0B1120"
     },
     "ios": {
+      "bundleIdentifier": "app.wasteflow.driver",
       "supportsTablet": false,
       "infoPlist": {
         "NSCameraUsageDescription": "Camera is required to scan QR codes on waste bins.",
@@ -22,17 +23,36 @@
       }
     },
     "android": {
+      "package": "app.wasteflow.driver",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0B1120"
       },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": false,
+          "data": [
+            {
+              "scheme": "wasteflow",
+              "host": "auth",
+              "pathPrefix": "/callback"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
       "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -57,6 +77,12 @@
           "photosPermission": "Allow WasteFlow to access photos for attaching to collection events."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "325e5a63-7c30-4fb7-bca0-7de67843b61a"
+      }
+    },
+    "owner": "akanksha_singh"
   }
 }
