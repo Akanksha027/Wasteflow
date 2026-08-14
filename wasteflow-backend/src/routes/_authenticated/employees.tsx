@@ -102,7 +102,7 @@ function EmployeesPage() {
     },
   });
 
-  const save = useSaveRow("employees", [qk.employees]);
+  const save = useSaveRow("employees", [qk.employees], "employee_code");
   const remove = useDeleteRow("employees", [qk.employees]);
 
   const grouped = useMemo(() => employees.data ?? [], [employees.data]);
@@ -222,7 +222,7 @@ function EmployeesPage() {
                   setOpen(true);
                 }}
               >
-                <Plus className="size-4" /> Add employee
+                <Plus className="size-4" /> Add employee (Updated)
               </Button>
             ) : null}
           </>
