@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>WasteFlow — How the System Works</title>
+  <style>
+    @page { size: A4; margin: 16mm 14mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      color: #1f2d26;
+      line-height: 1.45;
+      font-size: 11pt;
+      margin: 0;
+      background: #fff;
+    }
+    h1 { font-size: 22pt; margin: 0 0 6px; color: #1a4d3a; }
+    h2 {
+      font-size: 14pt;
+      margin: 22px 0 10px;
+      padding-bottom: 4px;
+      border-bottom: 2px solid #2f6b52;
+      color: #1a4d3a;
+      page-break-after: avoid;
+    }
+    h3 { font-size: 12pt; margin: 14px 0 6px; color: #245a44; page-break-after: avoid; }
+    p { margin: 0 0 8px; }
+    .subtitle { color: #5a6b62; font-size: 11pt; margin-bottom: 16px; }
+    .badge {
+      display: inline-block;
+      background: #e8f3ec;
+      color: #1a4d3a;
+      border: 1px solid #b7d4c4;
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 9pt;
+      font-weight: 600;
+    }
+    .box {
+      border: 1px solid #d5e2db;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin: 10px 0;
+      background: #f7faf8;
+      page-break-inside: avoid;
+    }
+    .box.accent { background: #fff8e8; border-color: #e6d19a; }
+    .box.warn { background: #fff4f0; border-color: #ecc4b5; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0 12px;
+      font-size: 10pt;
+      page-break-inside: avoid;
+    }
+    th, td {
+      border: 1px solid #cfdcd4;
+      padding: 7px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #e8f3ec; color: #1a4d3a; }
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin: 10px 0;
+      page-break-inside: avoid;
+    }
+    .node {
+      border: 1.5px solid #2f6b52;
+      background: #fff;
+      border-radius: 8px;
+      padding: 8px 10px;
+      min-width: 110px;
+      text-align: center;
+      font-size: 9.5pt;
+      font-weight: 600;
+      color: #1a4d3a;
+    }
+    .node.soft { border-color: #9ab5a6; background: #f3f7f4; font-weight: 500; }
+    .node.phone { border-color: #b8860b; background: #fff8e8; color: #6b4e00; }
+    .node.db { border-color: #3b6ea5; background: #eef5fb; color: #1e4a75; }
+    .arrow {
+      font-size: 16pt;
+      color: #2f6b52;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 10px 0;
+      page-break-inside: avoid;
+    }
+    .step {
+      display: grid;
+      grid-template-columns: 36px 1fr;
+      gap: 10px;
+      align-items: start;
+      page-break-inside: avoid;
+    }
+    .num {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #2f6b52;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 11pt;
+    }
+    .diagram {
+      border: 1px dashed #b7d4c4;
+      border-radius: 12px;
+      padding: 14px;
+      margin: 10px 0 14px;
+      background: linear-gradient(180deg, #fbfdfc, #f3f8f5);
+      page-break-inside: avoid;
+    }
+    .diagram-title {
+      font-size: 9pt;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #5a6b62;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+    .cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .cols3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .mini {
+      border: 1px solid #cfdcd4;
+      border-radius: 8px;
+      padding: 10px;
+      background: #fff;
+      font-size: 9.5pt;
+    }
+    .mini strong { display: block; color: #1a4d3a; margin-bottom: 4px; }
+    ul { margin: 4px 0 10px 18px; padding: 0; }
+    li { margin-bottom: 3px; }
+    .footer {
+      margin-top: 24px;
+      padding-top: 8px;
+      border-top: 1px solid #d5e2db;
+      font-size: 9pt;
+      color: #5a6b62;
+    }
+    code {
+      background: #eef3f0;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 9.5pt;
+    }
+    .center { text-align: center; }
+    .vflow {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .vflow .arrow { transform: rotate(90deg); }
+  </style>
+</head>
+<body>
+
+  <p><span class="badge">WasteFlow Operations Guide</span></p>
+  <h1>How WasteFlow Works</h1>
+  <p class="subtitle">
+    Simple explanation of the whole system — who does what, how drivers are created,
+    and how the website and phone app stay connected.
+  </p>
+
+  <h2>1. Big picture (one system, two apps)</h2>
+  <p>
+    WasteFlow is a waste-collection tracking system. There is <strong>one shared database</strong>
+    and <strong>two apps</strong> that use it.
+  </p>
+
+  <div class="diagram">
+    <div class="diagram-title">System connection map</div>
+    <div class="cols3">
+      <div class="mini center">
+        <strong>WasteFlow ERP</strong>
+        Website for office staff<br/>
+        <code>wasteflow-drab.vercel.app</code>
+      </div>
+      <div class="mini center" style="border-color:#3b6ea5;background:#eef5fb;">
+        <strong>Shared Database</strong>
+        Supabase (cloud)<br/>
+        Same data for everyone
+      </div>
+      <div class="mini center" style="border-color:#b8860b;background:#fff8e8;">
+        <strong>Driver App</strong>
+        Phone app for drivers<br/>
+        Expo / mobile
+      </div>
+    </div>
+    <p class="center" style="margin-top:10px;font-size:9.5pt;color:#5a6b62;">
+      Office plans work on the website → Drivers do work on the phone → Both see the same live data
+    </p>
+  </div>
+
+  <h2>2. The four roles</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Role</th>
+        <th>Where they work</th>
+        <th>What they do</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Admin</strong></td>
+        <td>ERP website</td>
+        <td>Full control — staff, routes, vehicles, settings, deletes</td>
+      </tr>
+      <tr>
+        <td><strong>Supervisor</strong></td>
+        <td>ERP website</td>
+        <td>Daily operations — routes, board, tracking, assignments</td>
+      </tr>
+      <tr>
+        <td><strong>Driver</strong></td>
+        <td><strong>Driver phone app</strong></td>
+        <td>Start trips, collect stops, GPS, photos, finish trips</td>
+      </tr>
+      <tr>
+        <td><strong>Field Worker</strong></td>
+        <td>ERP (scanner / field)</td>
+        <td>Scan QR codes, enter waste quantities on site</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="box accent">
+    <strong>Important:</strong> The phone Driver App only allows accounts with role <em>driver</em>.
+    Admins and supervisors must use the ERP website.
+  </div>
+
+  <h2>3. Static demo logins vs real (dynamic) staff</h2>
+  <div class="cols">
+    <div class="box">
+      <strong>Already set up (demo)</strong>
+      <ul>
+        <li><code>admin@wasteflow.app</code> / <code>Admin123!</code> → Admin (ERP)</li>
+        <li><code>driver@wasteflow.app</code> / <code>Driver123!</code> → Driver EMP-003 (phone)</li>
+      </ul>
+      Use these to try the system quickly.
+    </div>
+    <div class="box">
+      <strong>Real staff (dynamic)</strong>
+      <ul>
+        <li>Create a login (email + password or Google)</li>
+        <li>Create an Employee row in ERP</li>
+        <li>Link the email so the phone app knows who they are</li>
+      </ul>
+      This is how you add new drivers for a client.
+    </div>
+  </div>
+
+  <h2>4. How to make a new driver (exact flow)</h2>
+  <p>Two pieces must connect: a <strong>login</strong> and an <strong>employee profile</strong>.</p>
+
+  <div class="diagram">
+    <div class="diagram-title">Create a driver — step by step</div>
+    <div class="stack">
+      <div class="step">
+        <div class="num">1</div>
+        <div>
+          <strong>Create a login</strong><br/>
+          In Supabase Auth (or Google sign-in), create email + password for the person.
+          Example: <code>ram.driver@city.gov</code> / a temporary password.
+        </div>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <div>
+          <strong>Open ERP → Employees → Add employee</strong><br/>
+          Fill name, Employee ID (EMP-00x), set Role = <strong>Driver</strong>,
+          assign a <strong>Route</strong> and <strong>Vehicle</strong>.
+        </div>
+      </div>
+      <div class="step">
+        <div class="num">3</div>
+        <div>
+          <strong>Link auth account (email)</strong><br/>
+          Type the same email as their login. This attaches the employee to that login
+          so the Driver App can load their route and start trips.
+        </div>
+      </div>
+      <div class="step">
+        <div class="num">4</div>
+        <div>
+          <strong>Driver opens the phone app</strong><br/>
+          They sign in with that email + password (or Google). App checks:
+          role = driver + employee linked → shows their assigned work.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="box warn">
+    <strong>What “Link auth account” means:</strong>
+    Employee record = job profile (route, vehicle). Auth account = ability to log in.
+    The link field joins them. Without it, login works but the app says
+    “No employee profile — ask admin to link you.”
+  </div>
+
+  <div class="diagram">
+    <div class="diagram-title">Login ↔ Employee connection</div>
+    <div class="flow" style="justify-content:center;">
+      <div class="node soft">Auth login<br/><span style="font-weight:500;font-size:8.5pt;">email + password</span></div>
+      <div class="arrow">→</div>
+      <div class="node">Link email<br/>in Employees</div>
+      <div class="arrow">→</div>
+      <div class="node soft">Employee EMP-xxx<br/><span style="font-weight:500;font-size:8.5pt;">route + vehicle</span></div>
+      <div class="arrow">→</div>
+      <div class="node phone">Driver App<br/>can start trips</div>
+    </div>
+  </div>
+
+  <h2>5. Who assigns work, who does it, who watches</h2>
+  <div class="diagram">
+    <div class="diagram-title">Daily operations flow</div>
+    <div class="vflow">
+      <div class="node" style="min-width:260px;">Admin / Supervisor (ERP)<br/><span style="font-weight:500;font-size:8.5pt;">Set routes, BWGs, assign driver + vehicle, generate today’s board</span></div>
+      <div class="arrow">↓</div>
+      <div class="node db" style="min-width:260px;">Shared database updates</div>
+      <div class="arrow">↓</div>
+      <div class="node phone" style="min-width:260px;">Driver (phone)<br/><span style="font-weight:500;font-size:8.5pt;">Start trip → collect each stop (kg, photo, GPS) → end trip</span></div>
+      <div class="arrow">↓</div>
+      <div class="node" style="min-width:260px;">Office sees live results on ERP<br/><span style="font-weight:500;font-size:8.5pt;">Dashboard, Collection board, Waybills, Reports</span></div>
+    </div>
+  </div>
+
+  <h2>6. What each ERP screen is for</h2>
+  <table>
+    <thead>
+      <tr><th>Screen</th><th>Purpose (plain English)</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Dashboard</td><td>Today’s health check — scheduled, collected %, missed, diesel, vehicles</td></tr>
+      <tr><td>QR Scanner</td><td>Scan a generator QR and record a collection from the office/field</td></tr>
+      <tr><td>Collection &amp; Tracking</td><td>Trips, daily stop status board, GPS trail</td></tr>
+      <tr><td>Bulk Waste Generators</td><td>Master list of hotels/malls/sites + QR codes</td></tr>
+      <tr><td>Routes</td><td>Ordered stops for each route; generate today’s plan</td></tr>
+      <tr><td>Employees</td><td>Staff list, roles, route/vehicle assign, link login email</td></tr>
+      <tr><td>Vehicles</td><td>Fleet list, capacity, odometer, assigned driver</td></tr>
+      <tr><td>Diesel Log</td><td>Fuel entries and abnormal usage flags</td></tr>
+      <tr><td>Waybills</td><td>Trip paperwork (numbers, km, totals)</td></tr>
+      <tr><td>Waste Types</td><td>Wet / dry / reject categories used in collection</td></tr>
+      <tr><td>Reports</td><td>Summaries and analytics</td></tr>
+      <tr><td>Settings</td><td>Roles and admin tools</td></tr>
+    </tbody>
+  </table>
+
+  <h2>7. What the Driver App does</h2>
+  <div class="flow">
+    <div class="node phone">Login</div>
+    <div class="arrow">→</div>
+    <div class="node phone">See my route</div>
+    <div class="arrow">→</div>
+    <div class="node phone">Start trip</div>
+    <div class="arrow">→</div>
+    <div class="node phone">Collect stops</div>
+    <div class="arrow">→</div>
+    <div class="node phone">End trip</div>
+  </div>
+  <ul>
+    <li>Only drivers can use it</li>
+    <li>Shows assigned route(s) and vehicle</li>
+    <li>Records quantities, photos, and GPS</li>
+    <li>Can queue work offline and sync later</li>
+  </ul>
+
+  <h2>8. Setup order (first-time client)</h2>
+  <div class="diagram">
+    <div class="diagram-title">Recommended setup sequence</div>
+    <div class="flow">
+      <div class="node soft">Waste types</div>
+      <div class="arrow">→</div>
+      <div class="node soft">Vehicles</div>
+      <div class="arrow">→</div>
+      <div class="node soft">BWGs + QR</div>
+      <div class="arrow">→</div>
+      <div class="node soft">Routes + stops</div>
+      <div class="arrow">→</div>
+      <div class="node soft">Employees + links</div>
+      <div class="arrow">→</div>
+      <div class="node">Generate today</div>
+    </div>
+  </div>
+
+  <h2>9. One-sentence summary</h2>
+  <div class="box">
+    <strong>Admin/Supervisor plan people, routes, and today’s work in the ERP website;
+    Drivers carry out that work in the phone app; everyone reads and writes the same database
+    so the office sees fieldwork in real time.</strong>
+  </div>
+
+  <div class="footer">
+    WasteFlow How-It-Works Guide · Live ERP: https://wasteflow-drab.vercel.app ·
+    Demo admin: admin@wasteflow.app / Admin123! ·
+    Demo driver: driver@wasteflow.app / Driver123!
+  </div>
+
+</body>
+</html>
