@@ -112,32 +112,18 @@ function EmployeesPage() {
     let userId: string | null = editing?.user_id ?? null;
     const authEmail = (form["auth_email"] ?? "").trim().toLowerCase();
     if (authEmail) {
-      // First try user_roles table (which exists), then profiles as fallback
-      const { data: userRoleData } = await supabase
-        .from("user_roles")
-        .select("user_id")
-        .limit(1000);
-
-      // Try to find the user by looking up their auth session
-      // Use the auth admin endpoint via a Supabase RPC if available
-      const { data: rpcUser, error: rpcError } = await supabase.rpc("get_user_id_by_email", { email_input: authEmail }).maybeSingle();
-
-      if (!rpcError && rpcUser) {
-        userId = rpcUser;
-      } else {
-        // Fallback: check if any employee already has this user linked
-        const { data: existingEmp } = await supabase
-          .from("employees")
-          .select("user_id")
-          .eq("user_id", authEmail)
-          .maybeSingle();
-
-        if (!existingEmp) {
-          // Store the email as a pending link; user_id will be set when driver first logs in
-          // via the ensure_my_employee RPC on the app side
-          toast.warning("User not yet found — employee will be linked automatically when the driver first logs into the app.");
-          userId = null; // Will auto-link via ensure_my_employee RPC when driver logs in
+      // Try to find the user via RPC (runs with security definer, can access auth.users)
+      try {
+        const { data: rpcUser } = await supabase.rpc("get_user_id_by_email", { email_input: authEmail });
+        if (rpcUser) {
+          userId = rpcUser as string;
+        } else {
+          // User hasn't signed up yet — save employee anyway, will auto-link on first login
+          toast.warning("User not found in auth — employee saved. They will be linked automatically when they first log into the app.");
         }
+      } catch {
+        // RPC not available yet — save without linking
+        toast.warning("Could not verify email — employee saved without auth link.");
       }
     } else if (form["auth_email"] === "") {
       userId = null;
