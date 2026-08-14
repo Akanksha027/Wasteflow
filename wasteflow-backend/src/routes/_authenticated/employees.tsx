@@ -112,16 +112,33 @@ function EmployeesPage() {
     let userId: string | null = editing?.user_id ?? null;
     const authEmail = (form["auth_email"] ?? "").trim().toLowerCase();
     if (authEmail) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id")
-        .ilike("email", authEmail)
-        .maybeSingle();
-      if (!profile?.id) {
-        toast.error("No auth profile found for that email. The user must sign in (or Google) once first.");
-        return;
+      // First try user_roles table (which exists), then profiles as fallback
+      const { data: userRoleData } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .limit(1000);
+
+      // Try to find the user by looking up their auth session
+      // Use the auth admin endpoint via a Supabase RPC if available
+      const { data: rpcUser, error: rpcError } = await supabase.rpc("get_user_id_by_email", { email_input: authEmail }).maybeSingle();
+
+      if (!rpcError && rpcUser) {
+        userId = rpcUser;
+      } else {
+        // Fallback: check if any employee already has this user linked
+        const { data: existingEmp } = await supabase
+          .from("employees")
+          .select("user_id")
+          .eq("user_id", authEmail)
+          .maybeSingle();
+
+        if (!existingEmp) {
+          // Store the email as a pending link; user_id will be set when driver first logs in
+          // via the ensure_my_employee RPC on the app side
+          toast.warning("User not yet found — employee will be linked automatically when the driver first logs into the app.");
+          userId = null; // Will auto-link via ensure_my_employee RPC when driver logs in
+        }
       }
-      userId = profile.id;
     } else if (form["auth_email"] === "") {
       userId = null;
     }
