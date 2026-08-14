@@ -208,9 +208,16 @@ function EmployeesPage() {
                 size="sm"
                 onClick={() => {
                   setEditing(null);
+                  // Find highest existing employee code number to avoid unique constraint conflicts
+                  const existing = employees.data ?? [];
+                  let maxNum = existing.length;
+                  existing.forEach((emp: any) => {
+                    const match = String(emp.employee_code ?? "").match(/(\d+)$/);
+                    if (match) maxNum = Math.max(maxNum, parseInt(match[1], 10));
+                  });
                   setForm({
                     ...empty,
-                    employee_code: `EMP-${String((employees.data?.length ?? 0) + 1).padStart(3, "0")}`,
+                    employee_code: `EMP-${String(maxNum + 1).padStart(3, "0")}`,
                   });
                   setOpen(true);
                 }}

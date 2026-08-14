@@ -37,7 +37,16 @@ export function useSaveRow(table: string, invalidate: unknown[][]) {
         .insert(values as never)
         .select("id")
         .single();
-      if (error) throw error;
+      if (error) {
+        // 23505 = unique_violation in Postgres (Supabase returns this as code)
+        if (error.code === "23505" || (error as any).status === 409) {
+          throw new Error(
+            `A record with this value already exists. ` +
+            `Please change the unique field (e.g. Employee ID or code) and try again.`
+          );
+        }
+        throw error;
+      }
       return (data as { id: string }).id;
     },
     onSuccess: () => {
