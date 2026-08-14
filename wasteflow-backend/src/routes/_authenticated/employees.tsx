@@ -76,7 +76,7 @@ function EmployeesPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("employees")
-        .select("*, routes(route_code), vehicles(vehicle_number)")
+        .select("*, routes(route_code), vehicles!employees_vehicle_fk(vehicle_number)")
         .eq("is_archived", false)
         .order("employee_code");
       if (error) throw error;
@@ -102,10 +102,20 @@ function EmployeesPage() {
     },
   });
 
-  const save = useSaveRow("employees", [qk.employees], "employee_code");
+  const save = useSaveRow("employees", [qk.employees]);
   const remove = useDeleteRow("employees", [qk.employees]);
 
   const grouped = useMemo(() => employees.data ?? [], [employees.data]);
+
+  const nextEmployeeCode = async () => {
+    const { data } = await supabase.from("employees").select("employee_code");
+    let maxNum = 0;
+    for (const emp of data ?? []) {
+      const match = String(emp.employee_code ?? "").match(/(\d+)$/);
+      if (match) maxNum = Math.max(maxNum, parseInt(match[1], 10));
+    }
+    return `EMP-${String(maxNum + 1).padStart(3, "0")}`;
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,8 +143,8 @@ function EmployeesPage() {
       {
         id: editing?.id,
         values: {
-          employee_code: form["employee_code"],
-          full_name: form["full_name"],
+          employee_code: form["employee_code"]?.trim(),
+          full_name: form["full_name"]?.trim(),
           role: form["role"],
           phone: form["phone"] || null,
           emergency_contact: form["emergency_contact"] || null,
@@ -207,22 +217,15 @@ function EmployeesPage() {
               <Button
                 size="sm"
                 onClick={() => {
-                  setEditing(null);
-                  // Find highest existing employee code number to avoid unique constraint conflicts
-                  const existing = employees.data ?? [];
-                  let maxNum = existing.length;
-                  existing.forEach((emp: any) => {
-                    const match = String(emp.employee_code ?? "").match(/(\d+)$/);
-                    if (match) maxNum = Math.max(maxNum, parseInt(match[1], 10));
-                  });
-                  setForm({
-                    ...empty,
-                    employee_code: `EMP-${String(maxNum + 1).padStart(3, "0")}`,
-                  });
-                  setOpen(true);
+                  void (async () => {
+                    setEditing(null);
+                    const employee_code = await nextEmployeeCode();
+                    setForm({ ...empty, employee_code });
+                    setOpen(true);
+                  })();
                 }}
               >
-                <Plus className="size-4" /> Add employee (Updated)
+                <Plus className="size-4" /> Add employee
               </Button>
             ) : null}
           </>
@@ -233,6 +236,8 @@ function EmployeesPage() {
         <CardContent className="overflow-x-auto p-0">
           {employees.isLoading ? (
             <LoadingRows />
+          ) : employees.isError ? (
+            <EmptyState title="Could not load employees" description={(employees.error as Error)?.message} />
           ) : grouped.length === 0 ? (
             <EmptyState title="No employees yet" />
           ) : (

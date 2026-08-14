@@ -48,7 +48,7 @@ export async function signOut() {
 
 export async function resetPassword(email: string) {
   return supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: 'https://wasteflow-backend.vercel.app/auth',
+    redirectTo: 'https://wasteflow-drab.vercel.app/auth',
   });
 }
 

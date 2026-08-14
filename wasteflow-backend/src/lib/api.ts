@@ -23,14 +23,38 @@ export function useRows<T = Row>(
   });
 }
 
-export function useSaveRow(table: string, invalidate: unknown[][]) {
+export function useSaveRow(table: string, invalidate: unknown[][], onConflict?: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, values }: { id?: string; values: Row }) => {
       if (id) {
         const { error } = await supabase.from(table as never).update(values as never).eq("id", id);
-        if (error) throw error;
+        if (error) {
+          if (error.code === "23505" || (error as { status?: number }).status === 409) {
+            throw new Error(
+              "A record with this value already exists. Change the unique field (e.g. Employee ID) and try again.",
+            );
+          }
+          throw error;
+        }
         return id;
+      }
+      // Use upsert when onConflict column is specified (handles unique constraint gracefully)
+      if (onConflict) {
+        const { data, error } = await supabase
+          .from(table as never)
+          .upsert(values as never, { onConflict, ignoreDuplicates: false })
+          .select("id")
+          .single();
+        if (error) {
+          if (error.code === "23505" || (error as { status?: number }).status === 409) {
+            throw new Error(
+              "A record with this value already exists. Change the unique field (e.g. Employee ID) and try again.",
+            );
+          }
+          throw error;
+        }
+        return (data as { id: string }).id;
       }
       const { data, error } = await supabase
         .from(table as never)
@@ -38,11 +62,9 @@ export function useSaveRow(table: string, invalidate: unknown[][]) {
         .select("id")
         .single();
       if (error) {
-        // 23505 = unique_violation in Postgres (Supabase returns this as code)
-        if (error.code === "23505" || (error as any).status === 409) {
+        if (error.code === "23505" || (error as { status?: number }).status === 409) {
           throw new Error(
-            `A record with this value already exists. ` +
-            `Please change the unique field (e.g. Employee ID or code) and try again.`
+            "A record with this value already exists. Change the unique field (e.g. Employee ID) and try again.",
           );
         }
         throw error;
