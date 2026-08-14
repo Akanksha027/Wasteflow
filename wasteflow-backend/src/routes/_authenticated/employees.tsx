@@ -327,12 +327,12 @@ function EmployeesPage() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+        <DialogContent className="max-h-[90vh] flex flex-col sm:max-w-xl overflow-hidden">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit employee" : "Add employee"}</DialogTitle>
             <DialogDescription>Assignments drive the daily route and vehicle boards.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
+          <form id="employee-form" onSubmit={submit} className="grid gap-4 sm:grid-cols-2 flex-1 overflow-y-auto pr-1">
             {field("employee_code", "Employee ID", { required: true })}
             {field("full_name", "Full name", { required: true })}
             <div className="space-y-1.5">
@@ -439,15 +439,15 @@ function EmployeesPage() {
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
               />
             </div>
-            <DialogFooter className="sm:col-span-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={save.isPending}>
-                Save employee
-              </Button>
-            </DialogFooter>
           </form>
+          <DialogFooter className="pt-4 border-t mt-2 flex-shrink-0">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" form="employee-form" disabled={save.isPending}>
+              Save employee
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
