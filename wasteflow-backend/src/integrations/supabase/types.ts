@@ -1024,6 +1024,11 @@ export type Database = {
     }
     Functions: {
       ensure_my_employee: { Args: Record<string, never>; Returns: Database["public"]["Tables"]["employees"]["Row"] }
+      get_user_id_by_email: { Args: { email_input: string }; Returns: string }
+      admin_create_driver: {
+        Args: { p_email: string; p_password: string; p_full_name?: string; p_role?: Database["public"]["Enums"]["app_role"] }
+        Returns: string
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

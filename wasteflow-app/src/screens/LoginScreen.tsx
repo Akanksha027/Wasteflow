@@ -109,7 +109,7 @@ export default function LoginScreen() {
             <Text style={styles.googleBtnText}>Sign in with Google</Text>
           </TouchableOpacity>
           <Text style={styles.hint}>
-            Accounts are created by admins in WasteFlow ERP. Drivers cannot self-register here.
+            Sign in with the email and password your admin set in ERP → Employees.
           </Text>
         </View>
       </View>

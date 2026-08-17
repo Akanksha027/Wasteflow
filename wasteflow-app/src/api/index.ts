@@ -71,6 +71,7 @@ export async function getDriverEmployee(userId: string): Promise<Employee | null
     .select('*')
     .eq('user_id', userId)
     .eq('is_archived', false)
+    .limit(1)
     .maybeSingle();
   if (error) {
     console.warn('getDriverEmployee error:', error.message);

@@ -47,6 +47,12 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      const pathname = new URL(request.url).pathname.replace(/\/$/, "") || "/";
+      if (request.method === "POST" && pathname === "/api/driver-account") {
+        const { handleDriverAccountRequest } = await import("./lib/driver-account-api");
+        return await handleDriverAccountRequest(request);
+      }
+
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);

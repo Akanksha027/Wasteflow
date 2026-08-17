@@ -76,8 +76,7 @@
         {
           "photosPermission": "Allow WasteFlow to access photos for attaching to collection events."
         }
-      ],
-      "react-native-maps"
+      ]
     ],
     "extra": {
       "eas": {

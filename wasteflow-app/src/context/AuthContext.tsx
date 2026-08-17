@@ -37,6 +37,10 @@ const AuthContext = createContext<AuthContextValue>({
   refreshEmployee: async () => {},
 });
 
+function isDriver(role: string | null, employee: Employee | null) {
+  return role === 'driver' || employee?.role === 'driver';
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -46,25 +50,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [signingIn, setSigningIn] = useState(false);
 
   async function loadUserData(u: User): Promise<{ role: string | null; employee: Employee | null }> {
-    const r = await getUserRole(u.id);
-    let emp: Employee | null = null;
-
-    if (r === 'driver') {
-      emp = await getDriverEmployee(u.id);
-      if (!emp) {
-        emp = await ensureMyEmployee();
-      }
+    let emp = await getDriverEmployee(u.id);
+    if (!emp) {
+      emp = await ensureMyEmployee();
     }
-
-    setRole(r);
+    const r = await getUserRole(u.id);
+    const effectiveRole = isDriver(r, emp) ? 'driver' : r;
+    setRole(effectiveRole);
     setEmployee(emp);
-    return { role: r, employee: emp };
+    return { role: effectiveRole, employee: emp };
   }
 
   async function finalizeDriverSession(authedUser: User, nextSession: Session | null): Promise<boolean> {
     const { role: r, employee: emp } = await loadUserData(authedUser);
 
-    if (r !== 'driver') {
+    if (!isDriver(r, emp)) {
       await supabase.auth.signOut();
       setSession(null);
       setUser(null);
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setEmployee(null);
       Alert.alert(
         'Access denied',
-        'This app is for drivers only. Admins and supervisors should use WasteFlow ERP.',
+        'This login is not a Driver. In ERP → Employees, set Role to Driver, save, then sign in again.',
       );
       return false;
     }
@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setEmployee(null);
       Alert.alert(
         'No employee profile',
-        'Your account is not linked to a driver employee record. Ask an admin to link you in ERP → Employees.',
+        'Ask an admin to open ERP → Employees, set your login email and password, and save.',
       );
       return false;
     }
@@ -111,8 +111,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        const { role: r } = await loadUserData(s.user);
-        if (r && r !== 'driver') {
+        const { role: r, employee: emp } = await loadUserData(s.user);
+        if (r && !isDriver(r, emp)) {
           await supabase.auth.signOut();
           if (active) {
             setSession(null);
@@ -158,9 +158,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (msg.includes('email not confirmed')) {
           Alert.alert(
             'Confirm your email',
-            'Check your inbox for the WasteFlow confirmation link, then try again.',
+            'Ask an admin to save your login password again in ERP → Employees so the account is confirmed.',
           );
-        } else if (msg.includes('invalid login')) {
+        } else if (msg.includes('invalid login') || msg.includes('schema') || msg.includes('database error')) {
           Alert.alert('Sign in failed', 'Incorrect email or password.');
         } else {
           Alert.alert('Sign in failed', error.message);
@@ -183,8 +183,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signInWithGoogle(): Promise<boolean> {
     setSigningIn(true);
     try {
-      // Use HTTPS callback (allowed in Supabase) so Google returns here instead of the ERP home page.
-      // openAuthSessionAsync captures this URL and the app exchanges the code for a session.
       const redirectTo =
         process.env.EXPO_PUBLIC_AUTH_CALLBACK_URL ?? 'https://wasteflow-drab.vercel.app/auth/callback';
 
@@ -200,7 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error || !data.url) {
         Alert.alert(
           'Google sign-in unavailable',
-          error?.message ?? 'Use email and password, or ask admin to enable Google redirect for the driver app.',
+          'Use the email and password your admin set in ERP → Employees.',
         );
         return false;
       }
@@ -224,7 +222,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (code) {
         const exchanged = await supabase.auth.exchangeCodeForSession(code);
         if (exchanged.error || !exchanged.data.user) {
-          Alert.alert('Google sign-in failed', exchanged.error?.message ?? 'Could not create a session.');
+          Alert.alert(
+            'Google sign-in unavailable',
+            'Use the email and password your admin set in ERP → Employees.',
+          );
           return false;
         }
         sessionUser = exchanged.data.user;
@@ -232,22 +233,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (access_token && refresh_token) {
         const sessionData = await supabase.auth.setSession({ access_token, refresh_token });
         if (sessionData.error || !sessionData.data.user) {
-          Alert.alert('Google sign-in failed', sessionData.error?.message ?? 'Could not create a session.');
+          Alert.alert(
+            'Google sign-in unavailable',
+            'Use the email and password your admin set in ERP → Employees.',
+          );
           return false;
         }
         sessionUser = sessionData.data.user;
         nextSession = sessionData.data.session;
       } else {
         Alert.alert(
-          'Google sign-in incomplete',
-          `Add this redirect URL in Supabase Auth: ${redirectTo}`,
+          'Google sign-in unavailable',
+          'Use the email and password your admin set in ERP → Employees.',
         );
         return false;
       }
 
       return finalizeDriverSession(sessionUser, nextSession);
-    } catch (e: any) {
-      Alert.alert('Google sign-in failed', e?.message ?? 'Something went wrong.');
+    } catch {
+      Alert.alert(
+        'Google sign-in unavailable',
+        'Use the email and password your admin set in ERP → Employees.',
+      );
       return false;
     } finally {
       setSigningIn(false);

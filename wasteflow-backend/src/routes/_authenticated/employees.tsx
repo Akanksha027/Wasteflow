@@ -109,91 +109,103 @@ function EmployeesPage() {
   const grouped = useMemo(() => employees.data ?? [], [employees.data]);
 
   const nextEmployeeCode = async () => {
-    const { data } = await supabase.from("employees").select("employee_code");
+    const { data } = await supabase.from("employees").select("employee_code").eq("is_archived", false);
     let maxNum = 0;
     for (const emp of data ?? []) {
-      const match = String(emp.employee_code ?? "").match(/(\d+)$/);
+      const match = String(emp.employee_code ?? "").match(/^EMP-(\d{1,3})$/);
       if (match) maxNum = Math.max(maxNum, parseInt(match[1], 10));
     }
     return `EMP-${String(maxNum + 1).padStart(3, "0")}`;
   };
 
   const [submitting, setSubmitting] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
+  const [formError, setFormError] = useState("");
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError("");
     setSubmitting(true);
     try {
       let userId: string | null = editing?.user_id ?? null;
       const authEmail = (form["auth_email"] ?? "").trim().toLowerCase();
       const authPassword = (form["auth_password"] ?? "").trim();
 
-      if (authEmail && authPassword) {
-        // Create auth account + profile + role via secure RPC
+      if (authEmail && passwordTouched && authPassword) {
         if (authPassword.length < 6) {
-          toast.error("Password must be at least 6 characters.");
-          return;
+          setFormError("Password must be at least 6 characters. Employee will still be saved.");
+        } else {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const accessToken = sessionData.session?.access_token;
+          if (!accessToken) {
+            setFormError("Session expired. Employee will be saved without updating login.");
+          } else {
+            try {
+              const res = await fetch("/api/driver-account", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${accessToken}`,
+                },
+                body: JSON.stringify({
+                  email: authEmail,
+                  password: authPassword,
+                  fullName: (form["full_name"] ?? "").trim(),
+                  role: form["role"],
+                }),
+              });
+              const payload = (await res.json().catch(() => null)) as { userId?: string; error?: string } | null;
+              if (res.ok && payload?.userId) {
+                userId = payload.userId;
+              } else {
+                setFormError(payload?.error ?? "Login was not created. Employee will still be saved.");
+              }
+            } catch {
+              setFormError("Login was not created. Employee will still be saved.");
+            }
+          }
         }
-        const { data: newUserId, error: createErr } = await supabase.rpc("admin_create_driver", {
-          p_email: authEmail,
-          p_password: authPassword,
-          p_full_name: (form["full_name"] ?? "").trim(),
-          p_role: form["role"] as any,
-        });
-        if (createErr) {
-          toast.error(createErr.message ?? "Failed to create login account.");
-          return;
-        }
-        userId = newUserId as string;
-        toast.success("Login account created! Driver can now sign in with this email and password.");
-      } else if (authEmail && !authPassword) {
-        // Email only — try to find existing user
+      } else if (authEmail && !authPassword && !passwordTouched) {
         try {
           const { data: rpcUser } = await supabase.rpc("get_user_id_by_email", { email_input: authEmail });
-          if (rpcUser) {
-            userId = rpcUser as string;
-          } else {
-            toast.warning("User not found in auth. Set a password to create their login account, or they can use Google Sign-In.");
-          }
+          if (rpcUser) userId = rpcUser as string;
         } catch {
-          toast.warning("Could not verify email — employee saved without auth link.");
+          /* keep existing userId */
         }
-      } else if (form["auth_email"] === "") {
-        userId = null;
       }
 
-      save.mutate(
-        {
-          id: editing?.id,
-          values: {
-            employee_code: form["employee_code"]?.trim(),
-            full_name: form["full_name"]?.trim(),
-            role: form["role"],
-            phone: form["phone"] || null,
-            emergency_contact: form["emergency_contact"] || null,
-            joining_date: form["joining_date"] || null,
-            department: form["department"] || null,
-            shift: form["shift"] || null,
-            status: form["status"],
-            assigned_route_id: form["assigned_route_id"] || null,
-            assigned_vehicle_id: form["assigned_vehicle_id"] || null,
-            user_id: userId,
-            notes: form["notes"] || null,
-          },
+      await save.mutateAsync({
+        id: editing?.id,
+        values: {
+          employee_code: form["employee_code"]?.trim(),
+          full_name: form["full_name"]?.trim(),
+          role: form["role"],
+          phone: form["phone"] || null,
+          emergency_contact: form["emergency_contact"] || null,
+          joining_date: form["joining_date"] || null,
+          department: form["department"] || null,
+          shift: form["shift"] || null,
+          status: form["status"],
+          assigned_route_id: form["assigned_route_id"] || null,
+          assigned_vehicle_id: form["assigned_vehicle_id"] || null,
+          user_id: userId,
+          notes: form["notes"] || null,
         },
-        {
-          onSuccess: async () => {
-            if (userId && form["role"]) {
-              try {
-                await syncUserRole(userId, form["role"]);
-              } catch (err: any) {
-                toast.error(err?.message ?? "Employee saved, but role grant failed.");
-              }
-            }
-            setOpen(false);
-          },
-        },
-      );
+      });
+
+      if (userId && form["role"]) {
+        try {
+          await syncUserRole(userId, form["role"]);
+        } catch (err: any) {
+          toast.error(err?.message ?? "Employee saved, but role grant failed.");
+        }
+      }
+      setOpen(false);
+      setPasswordTouched(false);
+    } catch (err: any) {
+      const message = err?.message ?? "Could not save employee.";
+      setFormError(message);
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }
@@ -245,6 +257,8 @@ function EmployeesPage() {
                 onClick={() => {
                   void (async () => {
                     setEditing(null);
+                    setPasswordTouched(false);
+                    setFormError("");
                     const employee_code = await nextEmployeeCode();
                     setForm({ ...empty, employee_code });
                     setOpen(true);
@@ -306,6 +320,8 @@ function EmployeesPage() {
                             aria-label="Edit employee"
                             onClick={async () => {
                               setEditing(e);
+                              setPasswordTouched(false);
+                              setFormError("");
                               let authEmail = "";
                               if (e.user_id) {
                                 const { data: profile } = await supabase
@@ -459,13 +475,19 @@ function EmployeesPage() {
                 type="password"
                 placeholder={editing ? "Leave blank to keep current password" : "Min 6 characters — driver uses this to log in"}
                 value={form["auth_password"] ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, auth_password: e.target.value }))}
+                onChange={(e) => {
+                  setPasswordTouched(true);
+                  setForm((f) => ({ ...f, auth_password: e.target.value }));
+                }}
                 autoComplete="new-password"
               />
               <p className="text-xs text-muted-foreground">
-                Enter email + password to create a login account. The driver will use these credentials in the WasteFlow app.
+                For the driver app, set Role to Driver, then enter email + password. The driver signs in with those credentials.
               </p>
             </div>
+            {formError ? (
+              <p className="sm:col-span-2 text-sm text-destructive">{formError}</p>
+            ) : null}
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="emp-notes">Documents / notes</Label>
               <Textarea
