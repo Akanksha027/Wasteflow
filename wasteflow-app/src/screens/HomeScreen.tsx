@@ -1,20 +1,20 @@
 // src/screens/HomeScreen.tsx
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Modal,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
-import { getDriverRoutes, getRouteTodayStats, getVehicle, startTrip } from '../api';
+import { getDriverCompletedTrips, getDriverRoutes, getRouteTodayStats, getVehicle, startTrip } from '../api';
 import { getCurrentLocation } from '../services/location';
 import RouteCard from '../components/RouteCard';
 import OfflineBanner from '../components/OfflineBanner';
@@ -37,8 +37,10 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [syncingRouteId, setSyncingRouteId] = useState<string | null>(null);
+  const [completedTrips, setCompletedTrips] = useState<Array<CollectionTrip & { route: Route | null }>>([]);
   const [pendingRoute, setPendingRoute] = useState<RouteData | null>(null);
   const [startKm, setStartKm] = useState('');
+  const [activeTab, setActiveTab] = useState<'pending' | 'completed'>('pending');
 
   const loadData = useCallback(async () => {
     if (!employee?.id) {
@@ -49,7 +51,10 @@ export default function HomeScreen() {
     }
 
     try {
-      const routes = await getDriverRoutes(employee.id);
+      const [routes, completed] = await Promise.all([
+        getDriverRoutes(employee.id),
+        getDriverCompletedTrips(employee.id),
+      ]);
       const vehiclePromise = employee.assigned_vehicle_id
         ? getVehicle(employee.assigned_vehicle_id)
         : Promise.resolve(null);
@@ -71,6 +76,7 @@ export default function HomeScreen() {
       ]);
 
       setVehicle(veh);
+      setCompletedTrips(completed);
       fullData.sort((a, b) => {
         if (a.trip?.status === 'in_progress') return -1;
         if (b.trip?.status === 'in_progress') return 1;
@@ -83,9 +89,11 @@ export default function HomeScreen() {
     }
   }, [employee]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadData();
+    }, [loadData]),
+  );
 
   async function handleRoutePress(data: RouteData) {
     if (!employee?.id) {
@@ -117,10 +125,10 @@ export default function HomeScreen() {
 
     setSyncingRouteId(pendingRoute.route.id);
     try {
-      const loc = await getCurrentLocation();
+      const loc = await getCurrentLocation({ timeoutMs: 2000 });
       const trip = await startTrip({
         route_id: pendingRoute.route.id,
-        vehicle_id: employee.assigned_vehicle_id ?? vehicle?.id ?? null,
+        vehicle_id: pendingRoute.trip?.vehicle_id ?? employee.assigned_vehicle_id ?? vehicle?.id ?? null,
         driver_id: employee.id,
         start_km: km,
         start_lat: loc?.latitude,
@@ -156,65 +164,150 @@ export default function HomeScreen() {
       <OfflineBanner />
 
       <View style={styles.header}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Settings')}>
-          <Text style={styles.iconText}>⚙</Text>
-        </TouchableOpacity>
-
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{employee?.full_name ?? 'Driver'}</Text>
-          <Text style={styles.headerSub}>{today}</Text>
+        <View style={styles.headerTop}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Settings')}>
+            <Text style={styles.iconText}>⚙</Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.iconBtnPlaceholder} />
+        <View style={styles.headerBottom}>
+          <Text style={styles.headerGreeting}>
+            {new Date().getHours() < 12 ? 'Good morning,' : new Date().getHours() < 17 ? 'Good afternoon,' : 'Good evening,'}
+          </Text>
+          <Text style={styles.headerTitle}>{employee?.full_name ?? 'Driver'}</Text>
+          <View style={styles.headerBadgeRow}>
+            <View style={styles.dateBadge}>
+              <Text style={styles.dateBadgeText}>{today}</Text>
+            </View>
+            {vehicle && (
+              <View style={styles.vehicleBadge}>
+                <Text style={styles.vehicleBadgeText}>🚛 {vehicle.vehicle_number}</Text>
+              </View>
+            )}
+          </View>
+        </View>
       </View>
 
-      <View style={styles.listHeaderRow}>
-        <Text style={styles.listHeaderTitle}>Today's Routes</Text>
-        {vehicle ? (
-          <Text style={styles.seeAllText}>{vehicle.vehicle_number}</Text>
-        ) : null}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'pending' && styles.activeTab]}
+          onPress={() => setActiveTab('pending')}
+        >
+          <Text style={[styles.tabText, activeTab === 'pending' && styles.activeTabText]}>
+            Pending ({routeData.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
+          onPress={() => setActiveTab('completed')}
+        >
+          <Text style={[styles.tabText, activeTab === 'completed' && styles.activeTabText]}>
+            Completed ({completedTrips.length})
+          </Text>
+        </TouchableOpacity>
       </View>
-      <Text style={styles.flowHint}>
-        Start a trip → follow the map pins in order → scan QR at each stop → enter weight → complete trip.
-      </Text>
+
+      {activeTab === 'pending' && (
+        <Text style={styles.flowHint}>
+          Start a trip → follow the map pins in order → scan QR at each stop → enter weight → complete trip.
+        </Text>
+      )}
 
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={Colors.primary} size="large" />
         </View>
       ) : (
-        <FlatList
-          data={routeData}
-          keyExtractor={(item) => item.route.id}
+        <ScrollView
           contentContainerStyle={styles.list}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => {
                 setRefreshing(true);
-                loadData();
+                void loadData();
               }}
               tintColor={Colors.primary}
             />
           }
-          renderItem={({ item }) => (
-            <RouteCard
-              route={item.route}
-              stopCount={item.stopCount}
-              todayCount={item.todayCount}
-              collectedCount={item.collectedCount}
-              trip={item.trip}
-              onPress={() => handleRoutePress(item)}
-              isSyncing={syncingRouteId === item.route.id}
-            />
-          )}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyText}>No routes assigned today.</Text>
-            </View>
-          }
-        />
+        >
+          {activeTab === 'pending' ? (
+            routeData.length === 0 ? (
+              <View style={styles.empty}>
+                <Text style={styles.emptyText}>No routes assigned today.</Text>
+              </View>
+            ) : (
+              routeData.map((item) => (
+                <RouteCard
+                  key={item.route.id}
+                  route={item.route}
+                  stopCount={item.stopCount}
+                  todayCount={item.todayCount}
+                  collectedCount={item.collectedCount}
+                  trip={item.trip}
+                  onPress={() => handleRoutePress(item)}
+                  isSyncing={syncingRouteId === item.route.id}
+                />
+              ))
+            )
+          ) : (
+            completedTrips.length === 0 ? (
+              <View style={styles.empty}>
+                <Text style={styles.emptyText}>No completed trips yet.</Text>
+              </View>
+            ) : (
+              completedTrips.map((trip) => {
+              const route = trip.route ?? {
+                id: trip.route_id ?? trip.id,
+                route_code: '—',
+                name: 'Completed trip',
+                ward: null,
+                description: null,
+                is_active: true,
+              };
+              const when = new Date(trip.ended_at ?? trip.trip_date);
+              const mins =
+                trip.started_at && trip.ended_at
+                  ? Math.max(
+                      0,
+                      Math.round(
+                        (new Date(trip.ended_at).getTime() - new Date(trip.started_at).getTime()) / 60000,
+                      ),
+                    )
+                  : null;
+              return (
+                <TouchableOpacity
+                  key={trip.id}
+                  style={styles.completedCard}
+                  onPress={() =>
+                    navigation.navigate('TripComplete', {
+                      trip,
+                      route,
+                      stops: [],
+                      employeeId: employee?.id,
+                      vehicleId: trip.vehicle_id ?? employee?.assigned_vehicle_id ?? vehicle?.id ?? null,
+                      readOnly: true,
+                    })
+                  }
+                >
+                  <View style={styles.completedTop}>
+                    <Text style={styles.completedCode}>{route.route_code}</Text>
+                    <View style={styles.completedBadge}>
+                      <Text style={styles.completedBadgeText}>Completed</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.completedName}>{route.name}</Text>
+                  <Text style={styles.completedMeta}>
+                    {when.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                    {mins != null ? ` · ${mins} min` : ''}
+                    {` · ${Number(trip.total_collected_kg ?? 0).toFixed(1)} kg`}
+                  </Text>
+                  <Text style={styles.completedLink}>View details →</Text>
+                </TouchableOpacity>
+              );
+            })
+          ))}
+        </ScrollView>
       )}
 
       <Modal visible={!!pendingRoute} transparent animationType="fade" onRequestClose={() => setPendingRoute(null)}>
@@ -274,12 +367,15 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing['3xl'],
     paddingBottom: Spacing.xl,
+    backgroundColor: Colors.background,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    marginBottom: Spacing.lg,
   },
   iconBtn: {
     width: 44,
@@ -290,45 +386,91 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: Colors.border,
-  },
-  iconBtnPlaceholder: {
-    width: 44,
-    height: 44,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
   iconText: {
-    color: Colors.textSecondary,
-    fontSize: 18,
+    color: Colors.primary,
+    fontSize: 20,
   },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-    marginTop: 40,
+  headerBottom: {
+    alignItems: 'flex-start',
+  },
+  headerGreeting: {
+    color: Colors.textSecondary,
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.medium,
+    marginBottom: 2,
   },
   headerTitle: {
-    color: Colors.textPrimary,
-    fontSize: Typography.fontSize.lg,
-    fontWeight: Typography.fontWeight.medium,
+    color: Colors.white,
+    fontSize: Typography.fontSize['3xl'],
+    fontWeight: Typography.fontWeight.extrabold,
+    letterSpacing: -0.5,
+    marginBottom: Spacing.md,
   },
-  headerSub: {
-    color: Colors.textTertiary,
-    fontSize: Typography.fontSize.xs,
-    marginTop: 2,
-  },
-  listHeaderRow: {
+  headerBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: Spacing.sm,
+  },
+  dateBadge: {
+    backgroundColor: Colors.surface,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  dateBadgeText: {
+    color: Colors.textSecondary,
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  vehicleBadge: {
+    backgroundColor: Colors.primaryGlow,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(252, 163, 17, 0.3)',
+  },
+  vehicleBadgeText: {
+    color: Colors.primary,
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.bold,
+    letterSpacing: 0.5,
+  },
+  tabBar: {
+    flexDirection: 'row',
     paddingHorizontal: Spacing.xl,
     marginBottom: Spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
-  listHeaderTitle: {
-    color: Colors.white,
-    fontSize: Typography.fontSize.xl,
-    fontWeight: Typography.fontWeight.semibold,
+  tab: {
+    flex: 1,
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
-  seeAllText: {
-    color: Colors.textSecondary,
-    fontSize: Typography.fontSize.sm,
+  activeTab: {
+    borderBottomColor: Colors.primary,
+  },
+  tabText: {
+    color: Colors.textTertiary,
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.medium,
+  },
+  activeTabText: {
+    color: Colors.primary,
+    fontWeight: Typography.fontWeight.bold,
   },
   flowHint: {
     color: Colors.textTertiary,
@@ -354,59 +496,101 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     fontSize: Typography.fontSize.base,
   },
+  completedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Spacing['2xl'],
+    marginBottom: Spacing.md,
+  },
+  completedCard: {
+    backgroundColor: Colors.card,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.base,
+    marginBottom: Spacing.md,
+  },
+  completedTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  completedCode: { color: Colors.primary, fontWeight: Typography.fontWeight.extrabold },
+  completedBadge: {
+    backgroundColor: 'rgba(22,163,74,0.15)',
+    borderRadius: Radius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  completedBadgeText: { color: '#16A34A', fontSize: 10, fontWeight: Typography.fontWeight.bold },
+  completedName: { color: Colors.white, fontWeight: Typography.fontWeight.semibold, marginTop: 6 },
+  completedMeta: { color: Colors.textSecondary, fontSize: 12, marginTop: 4 },
+  completedLink: { color: Colors.primary, fontSize: 12, fontWeight: Typography.fontWeight.semibold, marginTop: 8 },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: Spacing.xl,
   },
   modalCard: {
     width: '100%',
-    backgroundColor: Colors.card,
-    borderRadius: Radius.xl,
-    padding: Spacing.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: Colors.primary,
+    borderRadius: Radius['2xl'],
+    padding: Spacing['2xl'],
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 10,
   },
   modalTitle: {
-    color: Colors.white,
-    fontSize: Typography.fontSize.xl,
-    fontWeight: Typography.fontWeight.bold,
+    color: Colors.black,
+    fontSize: Typography.fontSize['2xl'],
+    fontWeight: Typography.fontWeight.extrabold,
+    textAlign: 'center',
   },
   modalSub: {
-    color: Colors.textSecondary,
-    marginBottom: Spacing.lg,
+    color: 'rgba(0,0,0,0.7)',
+    marginBottom: Spacing.xl,
     marginTop: 4,
+    textAlign: 'center',
+    fontWeight: Typography.fontWeight.semibold,
   },
   modalLabel: {
-    color: Colors.textTertiary,
-    fontSize: Typography.fontSize.xs,
+    color: 'rgba(0,0,0,0.8)',
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
     marginBottom: Spacing.sm,
   },
   modalInput: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: Radius.full,
-    color: Colors.white,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    fontSize: Typography.fontSize.lg,
-    marginBottom: Spacing.lg,
+    color: Colors.black,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.lg,
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
+    marginBottom: Spacing.xl,
+    textAlign: 'center',
   },
   modalPrimary: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.black,
     borderRadius: Radius.full,
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.lg,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   modalPrimaryText: {
-    color: Colors.black,
+    color: Colors.white,
     fontWeight: Typography.fontWeight.bold,
+    fontSize: Typography.fontSize.md,
   },
-  modalMap: { alignItems: 'center', paddingTop: Spacing.md },
-  modalMapText: { color: Colors.primary, fontWeight: Typography.fontWeight.semibold },
+  modalMap: { alignItems: 'center', paddingTop: Spacing.lg },
+  modalMapText: { color: Colors.black, fontWeight: Typography.fontWeight.bold, textDecorationLine: 'underline' },
   modalCancel: { alignItems: 'center', paddingVertical: Spacing.md },
-  modalCancelText: { color: Colors.textTertiary },
+  modalCancelText: { color: 'rgba(0,0,0,0.6)', fontWeight: Typography.fontWeight.semibold },
 });

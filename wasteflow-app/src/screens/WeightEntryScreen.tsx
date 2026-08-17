@@ -138,7 +138,13 @@ export default function WeightEntryScreen() {
         Alert.alert('Saved offline', 'This stop will sync automatically when you are back online.');
       }
 
-      navigation.pop(2);
+      navigation.navigate('StopList', {
+        route,
+        trip,
+        employeeId,
+        vehicleId,
+        advanceFromStopId: stop.id,
+      });
     } catch (e: any) {
       Alert.alert('Error', e?.message ?? 'Something went wrong. Please try again.');
     } finally {

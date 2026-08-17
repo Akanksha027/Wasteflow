@@ -457,18 +457,19 @@ const styles = StyleSheet.create({
   overrideText: { color: Colors.textSecondary },
 
   manualCard: {
-    backgroundColor: Colors.card, borderRadius: Radius.xl, padding: Spacing.xl,
-    width: '88%', borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: Colors.primary, borderRadius: Radius['2xl'], padding: Spacing['2xl'],
+    width: '90%', shadowColor: Colors.primary, shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4, shadowRadius: 20, elevation: 10,
   },
-  manualTitle: { color: Colors.textPrimary, fontSize: Typography.fontSize.lg, fontWeight: Typography.fontWeight.bold, marginBottom: 4 },
-  manualHint: { color: Colors.textTertiary, fontSize: Typography.fontSize.xs, marginBottom: Spacing.base },
+  manualTitle: { color: Colors.black, fontSize: Typography.fontSize.xl, fontWeight: Typography.fontWeight.extrabold, textAlign: 'center', marginBottom: 4 },
+  manualHint: { color: 'rgba(0,0,0,0.7)', fontSize: Typography.fontSize.sm, fontWeight: Typography.fontWeight.semibold, textAlign: 'center', marginBottom: Spacing.xl },
   manualInput: {
-    backgroundColor: Colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
-    color: Colors.textPrimary, fontSize: Typography.fontSize.md, padding: Spacing.base,
-    fontFamily: 'monospace', marginBottom: Spacing.base, letterSpacing: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: Radius.full, borderWidth: 0,
+    color: Colors.black, fontSize: Typography.fontSize.xl, padding: Spacing.lg,
+    fontFamily: 'monospace', marginBottom: Spacing.xl, letterSpacing: 2, textAlign: 'center', fontWeight: 'bold'
   },
-  manualSubmit: { backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: Spacing.md, alignItems: 'center', marginBottom: Spacing.sm },
-  manualSubmitText: { color: Colors.white, fontWeight: Typography.fontWeight.bold },
-  cancelBtn: { paddingVertical: Spacing.md, alignItems: 'center' },
-  cancelText: { color: Colors.textTertiary },
+  manualSubmit: { backgroundColor: Colors.black, borderRadius: Radius.full, paddingVertical: Spacing.lg, alignItems: 'center', marginBottom: Spacing.md, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+  manualSubmitText: { color: Colors.white, fontWeight: Typography.fontWeight.bold, fontSize: Typography.fontSize.md },
+  cancelBtn: { paddingVertical: Spacing.sm, alignItems: 'center' },
+  cancelText: { color: 'rgba(0,0,0,0.6)', fontWeight: Typography.fontWeight.semibold },
 });

@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,6 +22,7 @@ export default function SettingsScreen() {
   const { pendingCount, isSyncing, syncNow, isOnline } = useOffline();
   const [vehicleLabel, setVehicleLabel] = useState('—');
   const [routeLabel, setRouteLabel] = useState('—');
+  const [signOutModalVisible, setSignOutModalVisible] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -44,16 +46,7 @@ export default function SettingsScreen() {
   }, [employee]);
 
   async function handleSignOut() {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: async () => {
-          await signOut();
-        },
-      },
-    ]);
+    setSignOutModalVisible(true);
   }
 
   return (
@@ -86,39 +79,6 @@ export default function SettingsScreen() {
           <InfoRow icon="🪪" label="Employee Code" value={employee?.employee_code ?? '—'} />
           <InfoRow icon="📞" label="Phone" value={employee?.phone ?? '—'} />
           <InfoRow icon="🚛" label="Assigned Vehicle" value={vehicleLabel} />
-          <InfoRow icon="🗺️" label="Assigned Route" value={routeLabel} />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Offline Queue</Text>
-          <View style={styles.offlineCard}>
-            <View style={styles.offlineRow}>
-              <View style={[styles.dot, { backgroundColor: isOnline ? Colors.primary : Colors.warning }]} />
-              <Text style={styles.offlineStatus}>{isOnline ? 'Online' : 'Offline'}</Text>
-            </View>
-            <View style={styles.pendingRow}>
-              <Text style={styles.pendingLabel}>Pending Events</Text>
-              <View style={[styles.pendingBadge, pendingCount > 0 && styles.pendingBadgeActive]}>
-                <Text style={[styles.pendingCount, pendingCount > 0 && styles.pendingCountActive]}>
-                  {pendingCount}
-                </Text>
-              </View>
-            </View>
-            {isOnline && (
-              <TouchableOpacity
-                style={[styles.syncBtn, isSyncing && styles.syncBtnDisabled]}
-                onPress={syncNow}
-                disabled={isSyncing}
-                accessibilityLabel="Sync now button"
-              >
-                {isSyncing ? (
-                  <ActivityIndicator color={Colors.white} size="small" />
-                ) : (
-                  <Text style={styles.syncBtnText}>↑  Sync Now</Text>
-                )}
-              </TouchableOpacity>
-            )}
-          </View>
         </View>
 
         <View style={styles.section}>
@@ -140,6 +100,26 @@ export default function SettingsScreen() {
 
         <View style={{ height: Spacing['2xl'] }} />
       </ScrollView>
+
+      <Modal visible={signOutModalVisible} transparent animationType="fade" onRequestClose={() => setSignOutModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Sign Out</Text>
+            <Text style={styles.modalSub}>Are you sure you want to sign out?</Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancel} onPress={() => setSignOutModalVisible(false)}>
+                <Text style={styles.modalCancelText}>CANCEL</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalPrimary} onPress={async () => {
+                setSignOutModalVisible(false);
+                await signOut();
+              }}>
+                <Text style={styles.modalPrimaryText}>SIGN OUT</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -217,4 +197,13 @@ const styles = StyleSheet.create({
   },
   signOutIcon: { fontSize: 18, marginRight: Spacing.sm },
   signOutText: { color: Colors.danger, fontSize: Typography.fontSize.base, fontWeight: Typography.fontWeight.bold },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', padding: Spacing.xl },
+  modalCard: { width: '100%', backgroundColor: Colors.primary, borderRadius: Radius['2xl'], padding: Spacing['2xl'], shadowColor: Colors.primary, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 10 },
+  modalTitle: { color: Colors.black, fontSize: Typography.fontSize['2xl'], fontWeight: Typography.fontWeight.extrabold, textAlign: 'center' },
+  modalSub: { color: 'rgba(0,0,0,0.7)', marginBottom: Spacing.xl, marginTop: 4, textAlign: 'center', fontWeight: Typography.fontWeight.semibold },
+  modalActions: { flexDirection: 'row', justifyContent: 'center', gap: Spacing.lg },
+  modalCancel: { paddingVertical: Spacing.md, paddingHorizontal: Spacing.lg, alignItems: 'center' },
+  modalCancelText: { color: 'rgba(0,0,0,0.6)', fontWeight: Typography.fontWeight.bold },
+  modalPrimary: { backgroundColor: Colors.black, borderRadius: Radius.full, paddingVertical: Spacing.md, paddingHorizontal: Spacing.xl, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+  modalPrimaryText: { color: Colors.white, fontWeight: Typography.fontWeight.bold },
 });

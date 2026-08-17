@@ -1,30 +1,63 @@
-// src/services/location.ts
 import { Linking, Platform } from 'react-native';
 import * as Location from 'expo-location';
 import { LocationCoords } from '../types';
+
+let lastKnown: LocationCoords | null = null;
+
+export function getLastKnownLocation(): LocationCoords | null {
+  return lastKnown;
+}
+
+function remember(coords: LocationCoords) {
+  lastKnown = coords;
+  return coords;
+}
 
 export async function requestLocationPermission(): Promise<boolean> {
   const { status } = await Location.requestForegroundPermissionsAsync();
   return status === 'granted';
 }
 
-export async function getCurrentLocation(): Promise<LocationCoords | null> {
+export async function getCurrentLocation(options?: {
+  timeoutMs?: number;
+  highAccuracy?: boolean;
+}): Promise<LocationCoords | null> {
+  const timeoutMs = options?.timeoutMs ?? 2500;
   try {
     const hasPermission = await requestLocationPermission();
-    if (!hasPermission) return null;
+    if (!hasPermission) return lastKnown;
 
-    const loc = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
-    });
+    try {
+      const cached = await Location.getLastKnownPositionAsync();
+      if (cached) {
+        remember({
+          latitude: cached.coords.latitude,
+          longitude: cached.coords.longitude,
+          accuracy: cached.coords.accuracy,
+        });
+      }
+    } catch {
+      /* ignore */
+    }
 
-    return {
-      latitude: loc.coords.latitude,
-      longitude: loc.coords.longitude,
-      accuracy: loc.coords.accuracy,
-    };
+    const loc = await Promise.race([
+      Location.getCurrentPositionAsync({
+        accuracy: options?.highAccuracy ? Location.Accuracy.High : Location.Accuracy.Balanced,
+      }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+    ]);
+
+    if (loc) {
+      return remember({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+        accuracy: loc.coords.accuracy,
+      });
+    }
+    return lastKnown;
   } catch (e) {
     console.warn('Location capture failed:', e);
-    return null;
+    return lastKnown;
   }
 }
 
@@ -47,11 +80,12 @@ export async function watchCurrentLocation(
         distanceInterval: 12,
       },
       (loc) => {
-        onChange({
+        const coords = remember({
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
           accuracy: loc.coords.accuracy,
         });
+        onChange(coords);
       },
     );
     return sub;

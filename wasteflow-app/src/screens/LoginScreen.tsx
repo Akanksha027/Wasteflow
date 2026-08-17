@@ -96,18 +96,7 @@ export default function LoginScreen() {
               <Text style={styles.loginBtnText}>Log In</Text>
             )}
           </TouchableOpacity>
-          <View style={styles.orRow}>
-            <View style={styles.orLine} />
-            <Text style={styles.orText}>or</Text>
-            <View style={styles.orLine} />
-          </View>
-          <TouchableOpacity
-            style={[styles.googleBtn, signingIn && styles.loginBtnDisabled]}
-            onPress={() => void signInWithGoogle()}
-            disabled={signingIn}
-          >
-            <Text style={styles.googleBtnText}>Sign in with Google</Text>
-          </TouchableOpacity>
+
           <Text style={styles.hint}>
             Sign in with the email and password your admin set in ERP → Employees.
           </Text>

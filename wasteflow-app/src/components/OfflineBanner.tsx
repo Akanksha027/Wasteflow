@@ -21,7 +21,7 @@ export default function OfflineBanner() {
     }
   }, [isOnline]);
 
-  if (isOnline && pendingCount === 0) return null;
+  if (isOnline) return null;
 
   return (
     <View style={[styles.banner, isOnline ? styles.syncing : styles.offline]}>

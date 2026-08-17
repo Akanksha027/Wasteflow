@@ -10,6 +10,7 @@ import {
   WasteType,
   LocationCoords,
   Bwg,
+  StopWithStatus,
 } from '../types';
 import {
   getLocalEventsForTrip,
@@ -112,23 +113,56 @@ export async function getRoute(routeId: string): Promise<Route | null> {
 // ─── Routes & Stops ────────────────────────────────────────────────────────────
 
 export async function getDriverRoutes(driverEmployeeId: string): Promise<Route[]> {
-  const { data: emp } = await supabase
-    .from('employees')
-    .select('assigned_route_id')
-    .eq('id', driverEmployeeId)
-    .maybeSingle();
+  const { data: trips } = await supabase
+    .from('collection_trips')
+    .select('route_id, status')
+    .eq('driver_id', driverEmployeeId)
+    .eq('trip_date', todayISO())
+    .neq('status', 'cancelled');
 
-  if (emp?.assigned_route_id) {
-    const { data, error } = await supabase
-      .from('routes')
-      .select('*')
-      .eq('id', emp.assigned_route_id)
-      .eq('is_active', true);
-    if (error) return [];
-    return data ?? [];
+  const active = (trips ?? []).filter(
+    (t) => t.status === 'not_started' || t.status === 'in_progress',
+  );
+  const routeIds = [
+    ...new Set(active.map((t) => t.route_id).filter((id): id is string => Boolean(id))),
+  ];
+
+  if (routeIds.length === 0 && !(trips ?? []).length) {
+    const { data: emp } = await supabase
+      .from('employees')
+      .select('assigned_route_id')
+      .eq('id', driverEmployeeId)
+      .maybeSingle();
+    if (emp?.assigned_route_id) routeIds.push(emp.assigned_route_id);
   }
 
-  return [];
+  if (routeIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('routes')
+    .select('*')
+    .in('id', routeIds)
+    .eq('is_active', true)
+    .order('route_code');
+  if (error) return [];
+  return data ?? [];
+}
+
+export async function getDriverCompletedTrips(driverEmployeeId: string): Promise<
+  Array<CollectionTrip & { route: Route | null }>
+> {
+  const { data, error } = await supabase
+    .from('collection_trips')
+    .select('*, routes(*)')
+    .eq('driver_id', driverEmployeeId)
+    .eq('status', 'completed')
+    .order('ended_at', { ascending: false })
+    .limit(30);
+  if (error) return [];
+  return (data ?? []).map((row: any) => ({
+    ...row,
+    route: (Array.isArray(row.routes) ? row.routes[0] : row.routes) ?? null,
+  }));
 }
 
 export async function getAllActiveRoutes(): Promise<Route[]> {
@@ -212,11 +246,15 @@ export async function getTodayTrip(routeId: string, driverEmployeeId: string): P
     .eq('route_id', routeId)
     .eq('driver_id', driverEmployeeId)
     .eq('trip_date', todayISO())
-    .eq('status', 'in_progress')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!error && data) return data;
+    .neq('status', 'cancelled')
+    .order('created_at', { ascending: false });
+  if (!error && data?.length) {
+    return (
+      data.find((t) => t.status === 'in_progress') ??
+      data.find((t) => t.status === 'not_started') ??
+      data[0]
+    );
+  }
   return getLocalTodayTrip(routeId, driverEmployeeId);
 }
 
@@ -228,16 +266,68 @@ export async function startTrip(params: {
   start_lat?: number;
   start_lng?: number;
 }): Promise<CollectionTrip | null> {
+  const startedAt = new Date().toISOString();
+  const { data: existingRows } = await supabase
+    .from('collection_trips')
+    .select('*')
+    .eq('route_id', params.route_id)
+    .eq('driver_id', params.driver_id)
+    .eq('trip_date', todayISO())
+    .in('status', ['not_started', 'in_progress'])
+    .order('created_at', { ascending: false });
+
+  const existing =
+    existingRows?.find((t) => t.status === 'in_progress') ??
+    existingRows?.find((t) => t.status === 'not_started') ??
+    null;
+
+  if (existing?.status === 'in_progress') {
+    await saveLocalTrip(existing);
+    return existing;
+  }
+
+  const startPatch = {
+    status: 'in_progress' as const,
+    started_at: startedAt,
+    start_lat: params.start_lat ?? existing?.start_lat ?? null,
+    start_lng: params.start_lng ?? existing?.start_lng ?? null,
+    start_km: params.start_km ?? existing?.start_km ?? null,
+    vehicle_id: params.vehicle_id ?? existing?.vehicle_id ?? null,
+  };
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from('collection_trips')
+      .update(startPatch)
+      .eq('id', existing.id)
+      .select()
+      .single();
+    if (!error && data) {
+      await saveLocalTrip(data);
+      if (params.start_lat != null && params.start_lng != null) {
+        await supabase.from('gps_events').insert({
+          event_type: 'trip_start',
+          trip_id: data.id,
+          vehicle_id: data.vehicle_id,
+          employee_id: params.driver_id,
+          latitude: params.start_lat,
+          longitude: params.start_lng,
+          recorded_at: startedAt,
+        });
+      }
+      return data;
+    }
+    if (error && !isOfflineError(error)) {
+      console.warn('startTrip update error:', error.message);
+    }
+  }
+
   const row = {
     trip_date: todayISO(),
     route_id: params.route_id,
     vehicle_id: params.vehicle_id,
     driver_id: params.driver_id,
-    status: 'in_progress' as const,
-    started_at: new Date().toISOString(),
-    start_lat: params.start_lat ?? null,
-    start_lng: params.start_lng ?? null,
-    start_km: params.start_km ?? null,
+    ...startPatch,
     total_collected_kg: 0,
     notes: null,
     end_km: null,
@@ -395,6 +485,20 @@ export async function getTodayEventsForTrip(tripId: string): Promise<CollectionE
   for (const e of remote) byBwg.set(e.bwg_id, e);
   for (const e of local) if (!byBwg.has(e.bwg_id)) byBwg.set(e.bwg_id, e);
   return Array.from(byBwg.values());
+}
+
+export async function getTripStopsWithStatus(routeId: string, tripId: string): Promise<StopWithStatus[]> {
+  const [rawStops, events] = await Promise.all([getRouteStops(routeId), getTodayEventsForTrip(tripId)]);
+  return rawStops.map((s) => {
+    const event = events.find((e) => e.bwg_id === s.bwg_id);
+    let status: StopWithStatus['status'] = 'pending';
+    let event_id: string | undefined;
+    if (event) {
+      event_id = event.id;
+      status = event.status === 'missed' ? 'skipped' : 'scanned';
+    }
+    return { ...s, status, event_id };
+  });
 }
 
 function buildChecklist(params: {

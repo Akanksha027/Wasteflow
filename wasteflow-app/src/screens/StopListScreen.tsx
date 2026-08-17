@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { getRouteStops, getTodayEventsForTrip, skipStop } from '../api';
-import { getCurrentLocation, openRouteInMaps, openTurnByTurn, watchCurrentLocation } from '../services/location';
+import { getCurrentLocation, openRouteInMaps, openTurnByTurn, watchCurrentLocation, getLastKnownLocation } from '../services/location';
 import StopItem from '../components/StopItem';
 import ProgressBar from '../components/ProgressBar';
 import OfflineBanner from '../components/OfflineBanner';
@@ -26,6 +26,7 @@ type StopListParams = {
     trip: CollectionTrip;
     employeeId: string;
     vehicleId: string | null;
+    advanceFromStopId?: string;
   };
 };
 
@@ -41,11 +42,13 @@ const SKIP_REASONS = [
 export default function StopListScreen() {
   const navigation = useNavigation<any>();
   const routeParams = useRoute<RouteProp<StopListParams, 'StopList'>>();
-  const { route, trip, employeeId, vehicleId } = routeParams.params;
+  const { route, trip, employeeId, vehicleId, advanceFromStopId } = routeParams.params;
 
   const [stops, setStops] = useState<StopWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'map' | 'list'>('map');
+  const [endTripModalVisible, setEndTripModalVisible] = useState(false);
+  const [remainingStopsCount, setRemainingStopsCount] = useState(0);
   const [selected, setSelected] = useState<StopWithStatus | null>(null);
   const [userLocation, setUserLocation] = useState<LocationCoords | null>(null);
   const [skipModalVisible, setSkipModalVisible] = useState(false);
@@ -54,7 +57,15 @@ export default function StopListScreen() {
 
   const slideAnim = useRef(new Animated.Value(300)).current;
 
-  async function loadStops() {
+  function pickNextStop(list: StopWithStatus[], fromId?: string | null) {
+    const from = fromId ? list.find((s) => s.id === fromId) : null;
+    const after = from
+      ? list.find((s) => s.status === 'pending' && s.stop_order > from.stop_order)
+      : null;
+    return after ?? list.find((s) => s.status === 'pending') ?? null;
+  }
+
+  const loadStops = useCallback(async () => {
     const [rawStops, events] = await Promise.all([
       getRouteStops(route.id),
       getTodayEventsForTrip(trip.id),
@@ -72,14 +83,17 @@ export default function StopListScreen() {
     });
     setStops(stopsWithStatus);
     setSelected((prev) => {
-      if (prev) return stopsWithStatus.find((s) => s.id === prev.id) ?? null;
-      return stopsWithStatus.find((s) => s.status === 'pending') ?? stopsWithStatus[0] ?? null;
+      const fromId = advanceFromStopId ?? prev?.id;
+      const current = prev && !advanceFromStopId
+        ? stopsWithStatus.find((s) => s.id === prev.id)
+        : null;
+      if (current?.status === 'pending') return current;
+      return pickNextStop(stopsWithStatus, fromId) ?? current ?? stopsWithStatus[0] ?? null;
     });
-  }
-
-  useEffect(() => {
-    loadStops().finally(() => setLoading(false));
-  }, []);
+    if (advanceFromStopId) {
+      navigation.setParams({ advanceFromStopId: undefined });
+    }
+  }, [route.id, trip.id, advanceFromStopId, navigation]);
 
   useEffect(() => {
     let sub: { remove: () => void } | null = null;
@@ -93,10 +107,8 @@ export default function StopListScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!loading) {
-        void loadStops();
-      }
-    }, [loading]),
+      void loadStops().finally(() => setLoading(false));
+    }, [loadStops]),
   );
 
   function showSkipModal(stop: StopWithStatus) {
@@ -115,30 +127,31 @@ export default function StopListScreen() {
 
   async function confirmSkip(reason: string) {
     if (!skipTargetStop) return;
-    setSkipping(true);
-    try {
-      const loc = await getCurrentLocation();
-      const result = await skipStop({
-        tripId: trip.id,
-        bwgId: skipTargetStop.bwg_id,
-        routeId: route.id,
-        vehicleId,
-        operatorId: employeeId,
-        reason,
-        location: loc,
-      });
+    const skipped = skipTargetStop;
+    setSkipTargetStop(null);
+    hideSkipModal();
+    const next = stops.map((s) =>
+      s.id === skipped.id ? { ...s, status: 'skipped' as const } : s,
+    );
+    setStops(next);
+    setSelected(pickNextStop(next, skipped.id));
+    setTab('map');
+    setSkipping(false);
 
-      if (result?.id) {
-        setStops((prev) =>
-          prev.map((s) =>
-            s.id === skipTargetStop.id ? { ...s, status: 'skipped', event_id: result.id } : s
-          )
-        );
-      }
-    } finally {
-      setSkipping(false);
-      hideSkipModal();
-    }
+    void skipStop({
+      tripId: trip.id,
+      bwgId: skipped.bwg_id,
+      routeId: route.id,
+      vehicleId,
+      operatorId: employeeId,
+      reason,
+      location: userLocation ?? getLastKnownLocation(),
+    }).then((result) => {
+      if (!result?.id) return;
+      setStops((prev) =>
+        prev.map((s) => (s.id === skipped.id ? { ...s, event_id: result.id } : s)),
+      );
+    });
   }
 
   function handleScanStop(stop: StopWithStatus) {
@@ -155,18 +168,8 @@ export default function StopListScreen() {
   function handleCompleteTrip() {
     const remaining = stops.filter((s) => s.status === 'pending').length;
     if (remaining > 0) {
-      Alert.alert(
-        'Stops remaining',
-        `${remaining} stop(s) are still pending. End the trip anyway? Remaining stops stay uncollected.`,
-        [
-          { text: 'Keep collecting', style: 'cancel' },
-          {
-            text: 'End trip',
-            style: 'destructive',
-            onPress: () => navigation.navigate('TripComplete', { trip, route, stops, employeeId, vehicleId }),
-          },
-        ],
-      );
+      setRemainingStopsCount(remaining);
+      setEndTripModalVisible(true);
       return;
     }
     navigation.navigate('TripComplete', { trip, route, stops, employeeId, vehicleId });
@@ -303,7 +306,8 @@ export default function StopListScreen() {
               </>
             ) : (
               <Text style={styles.doneHint}>
-                {activeStop.status === 'scanned' ? 'Collected' : 'Skipped'} · tap next pin or open Stops
+                {activeStop.status === 'scanned' ? 'Collected' : 'Skipped'}
+                {nextStop ? ' · moving to next stop' : ' · all stops done'}
               </Text>
             )}
           </View>
@@ -352,6 +356,26 @@ export default function StopListScreen() {
             </TouchableOpacity>
           </Animated.View>
         </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={endTripModalVisible} transparent animationType="fade" onRequestClose={() => setEndTripModalVisible(false)}>
+        <View style={styles.centerModalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Stops remaining</Text>
+            <Text style={styles.modalSub}>{remainingStopsCount} stop(s) are still pending. End the trip anyway? Remaining stops stay uncollected.</Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancel} onPress={() => setEndTripModalVisible(false)}>
+                <Text style={styles.modalCancelText}>KEEP COLLECTING</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalPrimary} onPress={() => {
+                setEndTripModalVisible(false);
+                navigation.navigate('TripComplete', { trip, route, stops, employeeId, vehicleId });
+              }}>
+                <Text style={styles.modalPrimaryText}>END TRIP</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -474,4 +498,14 @@ const styles = StyleSheet.create({
 
   cancelBtn: { marginTop: Spacing.sm, alignItems: 'center', paddingVertical: Spacing.base },
   cancelText: { color: Colors.textTertiary, fontSize: Typography.fontSize.sm },
+
+  centerModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', padding: Spacing.xl },
+  modalCard: { width: '100%', backgroundColor: Colors.primary, borderRadius: Radius['2xl'], padding: Spacing['2xl'], shadowColor: Colors.primary, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 10 },
+  modalTitle: { color: Colors.black, fontSize: Typography.fontSize['2xl'], fontWeight: Typography.fontWeight.extrabold, textAlign: 'center' },
+  modalSub: { color: 'rgba(0,0,0,0.7)', marginBottom: Spacing.xl, marginTop: 4, textAlign: 'center', fontWeight: Typography.fontWeight.semibold },
+  modalActions: { flexDirection: 'row', justifyContent: 'center', gap: Spacing.md },
+  modalCancel: { paddingVertical: Spacing.md, paddingHorizontal: Spacing.md, alignItems: 'center' },
+  modalCancelText: { color: 'rgba(0,0,0,0.6)', fontWeight: Typography.fontWeight.bold, fontSize: 12 },
+  modalPrimary: { backgroundColor: Colors.black, borderRadius: Radius.full, paddingVertical: Spacing.md, paddingHorizontal: Spacing.lg, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+  modalPrimaryText: { color: Colors.white, fontWeight: Typography.fontWeight.bold, fontSize: 12 },
 });
