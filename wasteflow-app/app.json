@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0B1120"
+      "backgroundColor": "#121212"
     },
     "ios": {
       "bundleIdentifier": "app.wasteflow.driver",
@@ -26,7 +26,7 @@
       "package": "app.wasteflow.driver",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0B1120"
+        "backgroundColor": "#121212"
       },
       "intentFilters": [
         {
