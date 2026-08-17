@@ -12,11 +12,12 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { getRouteStops, getTodayEventsForTrip, skipStop } from '../api';
-import { getCurrentLocation } from '../services/location';
+import { getCurrentLocation, openRouteInMaps, openTurnByTurn, watchCurrentLocation } from '../services/location';
 import StopItem from '../components/StopItem';
 import ProgressBar from '../components/ProgressBar';
 import OfflineBanner from '../components/OfflineBanner';
-import { Route, CollectionTrip, StopWithStatus } from '../types';
+import RouteMap from '../components/RouteMap';
+import { Route, CollectionTrip, StopWithStatus, LocationCoords } from '../types';
 import { Colors, Typography, Spacing, Radius } from '../theme';
 
 type StopListParams = {
@@ -44,6 +45,9 @@ export default function StopListScreen() {
 
   const [stops, setStops] = useState<StopWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<'map' | 'list'>('map');
+  const [selected, setSelected] = useState<StopWithStatus | null>(null);
+  const [userLocation, setUserLocation] = useState<LocationCoords | null>(null);
   const [skipModalVisible, setSkipModalVisible] = useState(false);
   const [skipTargetStop, setSkipTargetStop] = useState<StopWithStatus | null>(null);
   const [skipping, setSkipping] = useState(false);
@@ -67,19 +71,32 @@ export default function StopListScreen() {
       return { ...s, status, event_id };
     });
     setStops(stopsWithStatus);
+    setSelected((prev) => {
+      if (prev) return stopsWithStatus.find((s) => s.id === prev.id) ?? null;
+      return stopsWithStatus.find((s) => s.status === 'pending') ?? stopsWithStatus[0] ?? null;
+    });
   }
 
   useEffect(() => {
     loadStops().finally(() => setLoading(false));
   }, []);
 
-  // Refresh stop statuses every time we return to this screen (after a scan)
+  useEffect(() => {
+    let sub: { remove: () => void } | null = null;
+    void (async () => {
+      const first = await getCurrentLocation();
+      if (first) setUserLocation(first);
+      sub = await watchCurrentLocation(setUserLocation);
+    })();
+    return () => sub?.remove();
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       if (!loading) {
-        loadStops();
+        void loadStops();
       }
-    }, [loading])
+    }, [loading]),
   );
 
   function showSkipModal(stop: StopWithStatus) {
@@ -136,25 +153,52 @@ export default function StopListScreen() {
   }
 
   function handleCompleteTrip() {
+    const remaining = stops.filter((s) => s.status === 'pending').length;
+    if (remaining > 0) {
+      Alert.alert(
+        'Stops remaining',
+        `${remaining} stop(s) are still pending. End the trip anyway? Remaining stops stay uncollected.`,
+        [
+          { text: 'Keep collecting', style: 'cancel' },
+          {
+            text: 'End trip',
+            style: 'destructive',
+            onPress: () => navigation.navigate('TripComplete', { trip, route, stops, employeeId, vehicleId }),
+          },
+        ],
+      );
+      return;
+    }
     navigation.navigate('TripComplete', { trip, route, stops, employeeId, vehicleId });
   }
 
+  function navigateToStop(stop: StopWithStatus) {
+    const lat = stop.bwg?.latitude;
+    const lng = stop.bwg?.longitude;
+    if (lat == null || lng == null) {
+      Alert.alert('No GPS', 'This stop has no map coordinates.');
+      return;
+    }
+    openTurnByTurn(lat, lng, stop.bwg?.name);
+  }
+
   const completed = stops.filter((s) => s.status !== 'pending').length;
-  const allDone = stops.length > 0 && completed === stops.length;
+  const nextStop = stops.find((s) => s.status === 'pending') ?? null;
+  const activeStop = selected ?? nextStop;
+  const mappedStops = stops.filter((s) => s.bwg?.latitude != null && s.bwg?.longitude != null);
 
   return (
     <View style={styles.container}>
       <OfflineBanner />
 
-      {/* Modern Header matching mockup */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
           <Text style={styles.iconText}>←</Text>
         </TouchableOpacity>
-        
+
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Now Tracking</Text>
-          <Text style={styles.routeCode}>{route.route_code}</Text>
+          <Text style={styles.routeCode}>{route.route_code} · {route.name.replace(/^Route \d+ - /, '')}</Text>
         </View>
 
         <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.iconBtn}>
@@ -162,15 +206,50 @@ export default function StopListScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Progress */}
       <View style={styles.progressSection}>
         <ProgressBar completed={completed} total={stops.length} />
       </View>
 
-      {/* Stop list */}
+      <View style={styles.tabs}>
+        <TouchableOpacity
+          style={[styles.tab, tab === 'map' && styles.tabActive]}
+          onPress={() => setTab('map')}
+        >
+          <Text style={[styles.tabText, tab === 'map' && styles.tabTextActive]}>Map</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, tab === 'list' && styles.tabActive]}
+          onPress={() => setTab('list')}
+        >
+          <Text style={[styles.tabText, tab === 'list' && styles.tabTextActive]}>Stops</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.navAll}
+          onPress={() =>
+            openRouteInMaps(
+              mappedStops.map((s) => ({
+                latitude: s.bwg.latitude as number,
+                longitude: s.bwg.longitude as number,
+              })),
+            )
+          }
+        >
+          <Text style={styles.navAllText}>Full route</Text>
+        </TouchableOpacity>
+      </View>
+
       {loading ? (
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading stops…</Text>
+        </View>
+      ) : tab === 'map' ? (
+        <View style={styles.mapWrap}>
+          <RouteMap
+            stops={stops}
+            userLocation={userLocation}
+            selectedStopId={activeStop?.id}
+            onSelectStop={setSelected}
+          />
         </View>
       ) : (
         <FlatList
@@ -192,25 +271,55 @@ export default function StopListScreen() {
               <Text style={styles.emptyText}>No stops found for this route.</Text>
             </View>
           }
-          ListFooterComponent={<View style={{ height: 120 }} />}
+          ListFooterComponent={<View style={{ height: 160 }} />}
         />
       )}
 
-      {/* Complete Trip button */}
+      {activeStop ? (
+        <View style={styles.nextCard}>
+          <View style={styles.nextTop}>
+            <View style={styles.nextBadge}>
+              <Text style={styles.nextBadgeText}>
+                {activeStop.status === 'pending' ? `NEXT  ${activeStop.stop_order}` : `#${activeStop.stop_order}`}
+              </Text>
+            </View>
+            <Text style={styles.nextName} numberOfLines={1}>{activeStop.bwg?.name}</Text>
+          </View>
+          <Text style={styles.nextAddr} numberOfLines={1}>
+            {activeStop.bwg?.address ?? activeStop.bwg?.ward ?? 'No address'}
+          </Text>
+          <View style={styles.nextActions}>
+            {activeStop.status === 'pending' ? (
+              <>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={() => navigateToStop(activeStop)}>
+                  <Text style={styles.secondaryBtnText}>Navigate</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={() => showSkipModal(activeStop)}>
+                  <Text style={[styles.secondaryBtnText, { color: Colors.danger }]}>Skip</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.primaryBtn} onPress={() => handleScanStop(activeStop)}>
+                  <Text style={styles.primaryBtnText}>Scan QR</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <Text style={styles.doneHint}>
+                {activeStop.status === 'scanned' ? 'Collected' : 'Skipped'} · tap next pin or open Stops
+              </Text>
+            )}
+          </View>
+        </View>
+      ) : null}
+
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.completeBtn, !allDone && styles.completeBtnDisabled]}
-          onPress={handleCompleteTrip}
-          disabled={!allDone}
-          accessibilityLabel="Complete trip button"
-        >
-          <Text style={[styles.completeBtnText, !allDone && styles.completeBtnTextDisabled]}>
-            {allDone ? '✓  Complete Trip' : `${stops.length - completed} stops remaining`}
+        <TouchableOpacity style={styles.completeBtn} onPress={handleCompleteTrip}>
+          <Text style={styles.completeBtnText}>
+            {completed === stops.length && stops.length > 0
+              ? '✓  Complete Trip'
+              : `${stops.length - completed} stops remaining · End trip`}
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Skip Modal */}
       <Modal
         visible={skipModalVisible}
         transparent
@@ -253,7 +362,7 @@ const styles = StyleSheet.create({
 
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: Spacing.xl, paddingTop: Spacing['3xl'], paddingBottom: Spacing.xl,
+    paddingHorizontal: Spacing.xl, paddingTop: Spacing['3xl'], paddingBottom: Spacing.md,
   },
   iconBtn: {
     width: 44, height: 44, borderRadius: Radius.full,
@@ -265,8 +374,30 @@ const styles = StyleSheet.create({
   headerTitle: { color: Colors.textPrimary, fontSize: Typography.fontSize.lg, fontWeight: Typography.fontWeight.medium },
   routeCode: { color: Colors.textTertiary, fontSize: Typography.fontSize.sm, marginTop: 2 },
 
-  progressSection: { paddingHorizontal: Spacing.xl, paddingVertical: Spacing.base },
+  progressSection: { paddingHorizontal: Spacing.xl, paddingBottom: Spacing.sm },
 
+  tabs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+    marginBottom: Spacing.sm,
+    gap: 8,
+  },
+  tab: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  tabActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  tabText: { color: Colors.textSecondary, fontWeight: Typography.fontWeight.semibold, fontSize: 13 },
+  tabTextActive: { color: Colors.black },
+  navAll: { marginLeft: 'auto', paddingVertical: 8, paddingHorizontal: 10 },
+  navAllText: { color: Colors.primary, fontSize: 12, fontWeight: Typography.fontWeight.semibold },
+
+  mapWrap: { flex: 1, marginHorizontal: Spacing.base, borderRadius: Radius.xl, overflow: 'hidden' },
   list: { paddingHorizontal: Spacing.base },
 
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -275,19 +406,53 @@ const styles = StyleSheet.create({
   emptyContainer: { alignItems: 'center', paddingVertical: Spacing['3xl'] },
   emptyText: { color: Colors.textTertiary, fontSize: Typography.fontSize.base },
 
+  nextCard: {
+    marginHorizontal: Spacing.base,
+    marginTop: Spacing.sm,
+    backgroundColor: Colors.card,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.base,
+  },
+  nextTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  nextBadge: {
+    backgroundColor: Colors.primaryGlow,
+    borderRadius: Radius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  nextBadgeText: { color: Colors.primary, fontSize: 10, fontWeight: Typography.fontWeight.extrabold },
+  nextName: { color: Colors.white, fontWeight: Typography.fontWeight.semibold, flex: 1 },
+  nextAddr: { color: Colors.textSecondary, fontSize: 12, marginBottom: 10 },
+  nextActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  secondaryBtn: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  secondaryBtnText: { color: Colors.white, fontWeight: Typography.fontWeight.semibold, fontSize: 12 },
+  primaryBtn: {
+    flex: 1,
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.full,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  primaryBtnText: { color: Colors.black, fontWeight: Typography.fontWeight.bold },
+  doneHint: { color: Colors.textTertiary, fontSize: 12 },
+
   footer: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
     padding: Spacing.xl, paddingBottom: Spacing['2xl'],
     backgroundColor: Colors.background,
-    borderTopWidth: 1, borderTopColor: Colors.border,
   },
   completeBtn: {
     backgroundColor: Colors.primary, borderRadius: Radius.lg,
     paddingVertical: Spacing.base + 2, alignItems: 'center',
   },
-  completeBtnDisabled: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border },
-  completeBtnText: { color: Colors.white, fontSize: Typography.fontSize.base, fontWeight: Typography.fontWeight.bold },
-  completeBtnTextDisabled: { color: Colors.textTertiary },
+  completeBtnText: { color: Colors.black, fontSize: Typography.fontSize.base, fontWeight: Typography.fontWeight.bold },
 
   modalOverlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
   skipSheet: {

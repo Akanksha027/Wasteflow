@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import LoginScreen from '../screens/LoginScreen';
 import HomeScreen from '../screens/HomeScreen';
+import RoutePreviewScreen from '../screens/RoutePreviewScreen';
 import StopListScreen from '../screens/StopListScreen';
 import ScanScreen from '../screens/ScanScreen';
 import WeightEntryScreen from '../screens/WeightEntryScreen';
@@ -48,6 +49,7 @@ export default function AppNavigator() {
         ) : (
           <Stack.Group>
             <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="RoutePreview" component={RoutePreviewScreen} />
             <Stack.Screen name="StopList" component={StopListScreen} />
             <Stack.Screen name="Scan" component={ScanScreen} />
             <Stack.Screen name="WeightEntry" component={WeightEntryScreen} />

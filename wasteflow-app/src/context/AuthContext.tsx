@@ -3,7 +3,6 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { Session, User } from '@supabase/supabase-js';
 import { Alert } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
 import { supabase } from '../lib/supabase';
 import { getUserRole, getDriverEmployee, ensureMyEmployee, signIn as apiSignIn, resetPassword } from '../api';
 import { Employee } from '../types';
@@ -184,16 +183,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signInWithGoogle(): Promise<boolean> {
     setSigningIn(true);
     try {
-      const redirectTo = AuthSession.makeRedirectUri({
-        scheme: 'wasteflow',
-        path: 'auth/callback',
-      });
+      // Use HTTPS callback (allowed in Supabase) so Google returns here instead of the ERP home page.
+      // openAuthSessionAsync captures this URL and the app exchanges the code for a session.
+      const redirectTo =
+        process.env.EXPO_PUBLIC_AUTH_CALLBACK_URL ?? 'https://wasteflow-drab.vercel.app/auth/callback';
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo,
           skipBrowserRedirect: true,
+          queryParams: { access_type: 'offline', prompt: 'select_account' },
         },
       });
 

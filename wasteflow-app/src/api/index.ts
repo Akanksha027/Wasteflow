@@ -160,7 +160,10 @@ export async function getRouteStops(routeId: string): Promise<RouteStop[]> {
     console.warn('getRouteStops error:', error.message);
     return [];
   }
-  return ((data ?? []) as unknown as RouteStop[]);
+  return ((data ?? []) as any[]).map((row) => ({
+    ...row,
+    bwg: Array.isArray(row.bwg) ? row.bwg[0] : row.bwg,
+  })) as RouteStop[];
 }
 
 export async function getBwgByQr(qrCode: string): Promise<Bwg | null> {

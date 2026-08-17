@@ -174,6 +174,9 @@ export default function HomeScreen() {
           <Text style={styles.seeAllText}>{vehicle.vehicle_number}</Text>
         ) : null}
       </View>
+      <Text style={styles.flowHint}>
+        Start a trip → follow the map pins in order → scan QR at each stop → enter weight → complete trip.
+      </Text>
 
       {loading ? (
         <View style={styles.center}>
@@ -238,6 +241,22 @@ export default function HomeScreen() {
               ) : (
                 <Text style={styles.modalPrimaryText}>Start Trip</Text>
               )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalMap}
+              onPress={() => {
+                if (!employee?.id || !pendingRoute) return;
+                const km = startKm.trim() ? parseFloat(startKm) : undefined;
+                setPendingRoute(null);
+                navigation.navigate('RoutePreview', {
+                  route: pendingRoute.route,
+                  employeeId: employee.id,
+                  vehicleId: employee.assigned_vehicle_id ?? vehicle?.id ?? null,
+                  startKm: km,
+                });
+              }}
+            >
+              <Text style={styles.modalMapText}>View route map first</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.modalCancel} onPress={() => setPendingRoute(null)}>
               <Text style={styles.modalCancelText}>Cancel</Text>
@@ -310,6 +329,13 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: Typography.fontSize.sm,
   },
+  flowHint: {
+    color: Colors.textTertiary,
+    fontSize: Typography.fontSize.xs,
+    paddingHorizontal: Spacing.xl,
+    marginBottom: Spacing.lg,
+    lineHeight: 18,
+  },
   list: {
     paddingHorizontal: Spacing.xl,
     paddingBottom: Spacing['3xl'],
@@ -378,6 +404,8 @@ const styles = StyleSheet.create({
     color: Colors.black,
     fontWeight: Typography.fontWeight.bold,
   },
+  modalMap: { alignItems: 'center', paddingTop: Spacing.md },
+  modalMapText: { color: Colors.primary, fontWeight: Typography.fontWeight.semibold },
   modalCancel: { alignItems: 'center', paddingVertical: Spacing.md },
   modalCancelText: { color: Colors.textTertiary },
 });
