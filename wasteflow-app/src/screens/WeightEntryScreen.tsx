@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: Colors.border,
   },
-  iconText: { color: Colors.textSecondary, fontSize: 18 },
+  iconText: { color: Colors.textSecondary, fontSize: 18, textAlign: 'center', textAlignVertical: 'center', includeFontPadding: false, marginTop: -6 },
   headerCenter: { flex: 1, alignItems: 'center' },
   headerTitle: { color: Colors.white, fontSize: Typography.fontSize.lg, fontWeight: Typography.fontWeight.bold },
   headerSub: { color: Colors.textTertiary, fontSize: Typography.fontSize.xs, marginTop: 2 },

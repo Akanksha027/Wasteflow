@@ -164,13 +164,7 @@ export default function HomeScreen() {
       <OfflineBanner />
 
       <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Settings')}>
-            <Text style={styles.iconText}>⚙</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.headerBottom}>
+        <View style={styles.headerContent}>
           <Text style={styles.headerGreeting}>
             {new Date().getHours() < 12 ? 'Good morning,' : new Date().getHours() < 17 ? 'Good afternoon,' : 'Good evening,'}
           </Text>
@@ -185,6 +179,12 @@ export default function HomeScreen() {
               </View>
             )}
           </View>
+        </View>
+
+        <View style={styles.headerAction}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Settings')}>
+            <Text style={styles.iconText}>⚙</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -367,15 +367,20 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing['3xl'],
-    paddingBottom: Spacing.xl,
+    paddingTop: 60,
+    paddingBottom: Spacing['2xl'],
     backgroundColor: Colors.background,
   },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    marginBottom: Spacing.lg,
+  headerContent: {
+    flex: 1,
+    alignItems: 'flex-start',
+  },
+  headerAction: {
+    marginLeft: Spacing.lg,
   },
   iconBtn: {
     width: 44,
@@ -395,32 +400,33 @@ const styles = StyleSheet.create({
   iconText: {
     color: Colors.primary,
     fontSize: 20,
-  },
-  headerBottom: {
-    alignItems: 'flex-start',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   headerGreeting: {
     color: Colors.textSecondary,
-    fontSize: Typography.fontSize.md,
+    fontSize: Typography.fontSize.lg,
     fontWeight: Typography.fontWeight.medium,
-    marginBottom: 2,
+    marginBottom: 0,
   },
   headerTitle: {
     color: Colors.white,
-    fontSize: Typography.fontSize['3xl'],
+    fontSize: 34,
     fontWeight: Typography.fontWeight.extrabold,
-    letterSpacing: -0.5,
-    marginBottom: Spacing.md,
+    letterSpacing: -1,
+    marginBottom: Spacing.sm,
   },
   headerBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
+    marginTop: 4,
   },
   dateBadge: {
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.card,
     paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: Radius.full,
     borderWidth: 1,
     borderColor: Colors.border,

@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     textAlignVertical: 'center',
     includeFontPadding: false,
-    marginTop: -4,
+    marginTop: -8,
   },
   header: {
     marginBottom: Spacing['3xl'],

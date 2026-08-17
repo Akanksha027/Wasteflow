@@ -1,9 +1,10 @@
 // src/navigation/AppNavigator.tsx
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
+import * as SplashScreen from 'expo-splash-screen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import LoginScreen from '../screens/LoginScreen';
 import HomeScreen from '../screens/HomeScreen';
@@ -20,12 +21,14 @@ const Stack = createNativeStackNavigator();
 export default function AppNavigator() {
   const { session, role, employee, loading } = useAuth();
 
+  useEffect(() => {
+    if (!loading) {
+      SplashScreen.hideAsync();
+    }
+  }, [loading]);
+
   if (loading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={Colors.primary} size="large" />
-      </View>
-    );
+    return null;
   }
 
   const isAuthenticated = !!session && role === 'driver' && !!employee;

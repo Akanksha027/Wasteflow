@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  iconText: { color: Colors.textSecondary, fontSize: 18 },
+  iconText: { color: Colors.textSecondary, fontSize: 18, textAlign: 'center', textAlignVertical: 'center', includeFontPadding: false, marginTop: -6 },
   headerCenter: { flex: 1, alignItems: 'center' },
   title: { color: Colors.white, fontWeight: Typography.fontWeight.bold, fontSize: Typography.fontSize.lg },
   sub: { color: Colors.textTertiary, fontSize: 12 },

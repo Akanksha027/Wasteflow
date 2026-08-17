@@ -241,6 +241,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     textAlignVertical: 'center',
     includeFontPadding: false,
-    marginTop: -4, // Tweak to visually center the arrow in the circle
+    marginTop: -8,
   },
 });

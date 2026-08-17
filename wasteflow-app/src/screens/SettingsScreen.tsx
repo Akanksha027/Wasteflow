@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: Colors.border,
   },
-  iconText: { color: Colors.textSecondary, fontSize: 18 },
+  iconText: { color: Colors.textSecondary, fontSize: 18, textAlign: 'center', textAlignVertical: 'center', includeFontPadding: false, marginTop: -6 },
   headerTitle: { flex: 1, color: Colors.white, fontSize: Typography.fontSize.lg, fontWeight: Typography.fontWeight.bold, textAlign: 'center' },
   scroll: { padding: Spacing.xl },
   profileCard: {
