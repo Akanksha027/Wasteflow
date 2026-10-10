@@ -18,9 +18,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
     meta: [
-      { title: "Settings — WasteFlow ERP" },
+      { title: "Settings — AR ECOSYS" },
       { name: "description", content: "Manage your profile, review your role permissions and control offline sync." },
-      { property: "og:title", content: "Settings — WasteFlow ERP" },
+      { property: "og:title", content: "Settings — AR ECOSYS" },
       { property: "og:description", content: "Profile, role permissions and offline sync controls." },
     ],
   }),

@@ -28,9 +28,9 @@ import { formatDate, formatTime, kg, tonnes, downloadCsv, todayISO, daysAgoISO }
 export const Route = createFileRoute("/_authenticated/waybills")({
   head: () => ({
     meta: [
-      { title: "Waybills — WasteFlow ERP" },
+      { title: "Waybills — AR ECOSYS" },
       { name: "description", content: "Issue, track and print waste transport waybills linked to collection trips." },
-      { property: "og:title", content: "Waybills — WasteFlow ERP" },
+      { property: "og:title", content: "Waybills — AR ECOSYS" },
       { property: "og:description", content: "Issue, track and print waste transport waybills." },
     ],
   }),
@@ -425,7 +425,7 @@ function PrintableWaybill({ waybill }: { waybill: any }) {
     <div className="rounded-lg border p-5 print-area">
       <div className="flex items-start justify-between gap-4 border-b pb-4">
         <div>
-          <p className="text-lg font-semibold">WasteFlow ERP</p>
+          <p className="text-lg font-semibold">AR ECOSYS</p>
           <p className="text-sm text-muted-foreground">Waste Transport Waybill</p>
           <p className="mt-2 text-sm font-medium">{waybill.waybill_number}</p>
           <p className="text-xs text-muted-foreground">{formatDate(waybill.waybill_date)}</p>

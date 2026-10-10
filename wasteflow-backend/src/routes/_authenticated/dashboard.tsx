@@ -41,9 +41,9 @@ import { qk } from "@/lib/api";
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
     meta: [
-      { title: "Operations Dashboard — WasteFlow ERP" },
+      { title: "Operations Dashboard — AR ECOSYS" },
       { name: "description", content: "Live waste collection KPIs, route compliance and fleet activity." },
-      { property: "og:title", content: "Operations Dashboard — WasteFlow ERP" },
+      { property: "og:title", content: "Operations Dashboard — AR ECOSYS" },
       { property: "og:description", content: "Live waste collection KPIs, route compliance and fleet activity." },
     ],
   }),
@@ -74,7 +74,9 @@ function DashboardPage() {
       }
       const eventQuery = supabase
         .from("collection_events")
-        .select("*, bwgs(name, bwg_code), routes(route_code, name), vehicles(vehicle_number)")
+        .select(
+          "*, bwgs(name, bwg_code, qr_code, ward), routes(route_code, name), vehicles(vehicle_number), employees!collection_events_operator_id_fkey(full_name, employee_code)",
+        )
         .gte("event_date", from)
         .lte("event_date", to)
         .order("scanned_at", { ascending: false });
@@ -345,7 +347,7 @@ function DashboardPage() {
           <Card>
             <CardHeader className="flex-row items-center justify-between">
               <CardTitle className="text-base">Recent scans & collections</CardTitle>
-              <Link to="/collection" className="text-sm text-primary underline-offset-4 hover:underline">
+              <Link to="/trips-history" className="text-sm text-primary underline-offset-4 hover:underline">
                 View all
               </Link>
             </CardHeader>
@@ -353,26 +355,53 @@ function DashboardPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Generator</TableHead>
+                    <TableHead>Generator / area</TableHead>
+                    <TableHead>QR</TableHead>
                     <TableHead>Route</TableHead>
-                    <TableHead>Vehicle</TableHead>
+                    <TableHead>Driver</TableHead>
                     <TableHead>Scanned</TableHead>
                     <TableHead>GPS</TableHead>
                     <TableHead className="text-right">Quantity</TableHead>
+                    <TableHead>Notes</TableHead>
+                    <TableHead>Photo</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {kpis.recent.map((e: any) => (
                     <TableRow key={e.id}>
-                      <TableCell className="font-medium">{e.bwgs?.name}</TableCell>
+                      <TableCell>
+                        <p className="font-medium">{e.bwgs?.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {[e.bwgs?.bwg_code, e.bwgs?.ward].filter(Boolean).join(" · ") || "—"}
+                        </p>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{e.bwgs?.qr_code ?? "—"}</TableCell>
                       <TableCell>{e.routes?.route_code}</TableCell>
-                      <TableCell>{e.vehicles?.vehicle_number ?? "—"}</TableCell>
+                      <TableCell>{e.employees?.full_name ?? "—"}</TableCell>
                       <TableCell className="whitespace-nowrap">{formatDateTime(e.scanned_at)}</TableCell>
                       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                         {coords(e.latitude, e.longitude)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{kg(e.total_kg)}</TableCell>
+                      <TableCell className="max-w-[180px] text-xs text-muted-foreground">
+                        {e.remarks ? <span className="line-clamp-2 text-foreground">{e.remarks}</span> : "—"}
+                      </TableCell>
+                      <TableCell>
+                        {e.photo_url ? (
+                          <a
+                            href={e.photo_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-block overflow-hidden rounded border"
+                            title="Open collection photo"
+                          >
+                            <img src={e.photo_url} alt="Collection evidence" className="size-12 object-cover" />
+                          </a>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <StatusBadge status={e.status} />
                       </TableCell>

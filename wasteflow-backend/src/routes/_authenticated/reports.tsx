@@ -17,9 +17,9 @@ import { kg, tonnes, currency, downloadCsv, daysAgoISO, todayISO, formatDate, pc
 export const Route = createFileRoute("/_authenticated/reports")({
   head: () => ({
     meta: [
-      { title: "Reports & Analytics — WasteFlow ERP" },
+      { title: "Reports & Analytics — AR ECOSYS" },
       { name: "description", content: "Daily collection, route compliance, vehicle utilisation, diesel and waste composition reports." },
-      { property: "og:title", content: "Reports & Analytics — WasteFlow ERP" },
+      { property: "og:title", content: "Reports & Analytics — AR ECOSYS" },
       { property: "og:description", content: "Operational reports with CSV export and print-friendly views." },
     ],
   }),

@@ -23,6 +23,7 @@ import {
   CloudOff,
   RefreshCw,
   MoreHorizontal,
+  History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -34,20 +35,27 @@ type NavItem = { to: string; label: string; icon: typeof LayoutDashboard };
 
 const NAV: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/scanner", label: "QR Scanner", icon: QrCode },
-  { to: "/collection", label: "Collection & Tracking", icon: ClipboardCheck },
-  { to: "/bwgs", label: "Bulk Waste Generators", icon: Building2 },
-  { to: "/routes", label: "Routes", icon: RouteIcon },
-  { to: "/employees", label: "Employees", icon: Users },
+  { to: "/scanner", label: "Scan Dustbin QR", icon: QrCode },
+  { to: "/schedule-trips", label: "Schedule Trips", icon: ClipboardCheck },
+  { to: "/trips-history", label: "Trips History", icon: History },
+  { to: "/bwgs", label: "Dustbins & QR", icon: Building2 },
+  { to: "/routes", label: "Routes & Stops", icon: RouteIcon },
+  { to: "/employees", label: "Staff & Drivers", icon: Users },
   { to: "/vehicles", label: "Vehicles", icon: Truck },
-  { to: "/diesel", label: "Diesel Log", icon: Fuel },
-  { to: "/waybills", label: "Waybills", icon: FileText },
-  { to: "/waste-types", label: "Waste Types & Quantities", icon: Recycle },
-  { to: "/reports", label: "Reports & Analytics", icon: BarChart3 },
+  { to: "/diesel", label: "Diesel / Fuel Log", icon: Fuel },
+  { to: "/waybills", label: "Transport Waybills", icon: FileText },
+  { to: "/waste-types", label: "Waste Categories", icon: Recycle },
+  { to: "/reports", label: "Reports", icon: BarChart3 },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
-const MOBILE_NAV = NAV.slice(0, 5);
+const MOBILE_NAV = [
+  NAV[0], // Dashboard
+  NAV[1], // Scanner
+  NAV[2], // Schedule Trips
+  NAV[3], // Trips History
+  NAV[5], // Routes
+];
 
 function useQueueCount() {
   const [count, setCount] = useState(0);
@@ -121,7 +129,7 @@ function AlertsBell() {
   const count = alerts.data ?? 0;
   return (
     <Link
-      to="/collection"
+      to="/schedule-trips"
       className="relative rounded-md p-2 hover:bg-secondary"
       aria-label={count ? `${count} operational alerts` : "No operational alerts"}
     >
@@ -158,8 +166,8 @@ export function AppLayout() {
         </span>
         {!collapsed && (
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">WasteFlow ERP</p>
-            <p className="truncate text-[11px] text-sidebar-foreground/60">Municipal operations</p>
+            <p className="truncate text-sm font-semibold">AR ECOSYS</p>
+            <p className="truncate text-[11px] text-sidebar-foreground/60">Waste collection ops</p>
           </div>
         )}
         <button

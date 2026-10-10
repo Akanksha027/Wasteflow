@@ -20,11 +20,17 @@ import { Route as AuthenticatedEmployeesRouteImport } from './routes/_authentica
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
 import { Route as AuthenticatedRoutesRouteImport } from './routes/_authenticated/routes'
 import { Route as AuthenticatedScannerRouteImport } from './routes/_authenticated/scanner'
+import { Route as AuthenticatedScheduleTripsRouteImport } from './routes/_authenticated/schedule-trips'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedTripsHistoryRouteImport } from './routes/_authenticated/trips-history'
 import { Route as AuthenticatedVehiclesRouteImport } from './routes/_authenticated/vehicles'
 import { Route as AuthenticatedWasteTypesRouteImport } from './routes/_authenticated/waste-types'
 import { Route as AuthenticatedWaybillsRouteImport } from './routes/_authenticated/waybills'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AuthenticatedBwgsNewRouteImport } from './routes/_authenticated/bwgs_.new'
+import { Route as AuthenticatedRoutesRouteIdRouteImport } from './routes/_authenticated/routes_.$routeId'
+import { Route as AuthenticatedRoutesNewRouteImport } from './routes/_authenticated/routes_.new'
+import { Route as AuthenticatedRoutesRouteIdEditRouteImport } from './routes/_authenticated/routes_.$routeId.edit'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -80,11 +86,23 @@ const AuthenticatedScannerRoute = AuthenticatedScannerRouteImport.update({
   path: '/scanner',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedScheduleTripsRoute =
+  AuthenticatedScheduleTripsRouteImport.update({
+    id: '/schedule-trips',
+    path: '/schedule-trips',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedTripsHistoryRoute =
+  AuthenticatedTripsHistoryRouteImport.update({
+    id: '/trips-history',
+    path: '/trips-history',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedVehiclesRoute = AuthenticatedVehiclesRouteImport.update({
   id: '/vehicles',
   path: '/vehicles',
@@ -105,6 +123,28 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/callback',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthenticatedBwgsNewRoute = AuthenticatedBwgsNewRouteImport.update({
+  id: '/bwgs_/new',
+  path: '/bwgs/new',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedRoutesRouteIdRoute =
+  AuthenticatedRoutesRouteIdRouteImport.update({
+    id: '/routes_/$routeId',
+    path: '/routes/$routeId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedRoutesNewRoute = AuthenticatedRoutesNewRouteImport.update({
+  id: '/routes_/new',
+  path: '/routes/new',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedRoutesRouteIdEditRoute =
+  AuthenticatedRoutesRouteIdEditRouteImport.update({
+    id: '/edit',
+    path: '/edit',
+    getParentRoute: () => AuthenticatedRoutesRouteIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -117,11 +157,17 @@ export interface FileRoutesByFullPath {
   '/reports': typeof AuthenticatedReportsRoute
   '/routes': typeof AuthenticatedRoutesRoute
   '/scanner': typeof AuthenticatedScannerRoute
+  '/schedule-trips': typeof AuthenticatedScheduleTripsRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/trips-history': typeof AuthenticatedTripsHistoryRoute
   '/vehicles': typeof AuthenticatedVehiclesRoute
   '/waste-types': typeof AuthenticatedWasteTypesRoute
   '/waybills': typeof AuthenticatedWaybillsRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/bwgs/new': typeof AuthenticatedBwgsNewRoute
+  '/routes/$routeId': typeof AuthenticatedRoutesRouteIdRouteWithChildren
+  '/routes/new': typeof AuthenticatedRoutesNewRoute
+  '/routes/$routeId/edit': typeof AuthenticatedRoutesRouteIdEditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -134,11 +180,17 @@ export interface FileRoutesByTo {
   '/reports': typeof AuthenticatedReportsRoute
   '/routes': typeof AuthenticatedRoutesRoute
   '/scanner': typeof AuthenticatedScannerRoute
+  '/schedule-trips': typeof AuthenticatedScheduleTripsRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/trips-history': typeof AuthenticatedTripsHistoryRoute
   '/vehicles': typeof AuthenticatedVehiclesRoute
   '/waste-types': typeof AuthenticatedWasteTypesRoute
   '/waybills': typeof AuthenticatedWaybillsRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/bwgs/new': typeof AuthenticatedBwgsNewRoute
+  '/routes/$routeId': typeof AuthenticatedRoutesRouteIdRouteWithChildren
+  '/routes/new': typeof AuthenticatedRoutesNewRoute
+  '/routes/$routeId/edit': typeof AuthenticatedRoutesRouteIdEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -153,11 +205,17 @@ export interface FileRoutesById {
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
   '/_authenticated/routes': typeof AuthenticatedRoutesRoute
   '/_authenticated/scanner': typeof AuthenticatedScannerRoute
+  '/_authenticated/schedule-trips': typeof AuthenticatedScheduleTripsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/trips-history': typeof AuthenticatedTripsHistoryRoute
   '/_authenticated/vehicles': typeof AuthenticatedVehiclesRoute
   '/_authenticated/waste-types': typeof AuthenticatedWasteTypesRoute
   '/_authenticated/waybills': typeof AuthenticatedWaybillsRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/_authenticated/bwgs_/new': typeof AuthenticatedBwgsNewRoute
+  '/_authenticated/routes_/$routeId': typeof AuthenticatedRoutesRouteIdRouteWithChildren
+  '/_authenticated/routes_/new': typeof AuthenticatedRoutesNewRoute
+  '/_authenticated/routes_/$routeId/edit': typeof AuthenticatedRoutesRouteIdEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -172,11 +230,17 @@ export interface FileRouteTypes {
     | '/reports'
     | '/routes'
     | '/scanner'
+    | '/schedule-trips'
     | '/settings'
+    | '/trips-history'
     | '/vehicles'
     | '/waste-types'
     | '/waybills'
     | '/auth/callback'
+    | '/bwgs/new'
+    | '/routes/$routeId'
+    | '/routes/new'
+    | '/routes/$routeId/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -189,11 +253,17 @@ export interface FileRouteTypes {
     | '/reports'
     | '/routes'
     | '/scanner'
+    | '/schedule-trips'
     | '/settings'
+    | '/trips-history'
     | '/vehicles'
     | '/waste-types'
     | '/waybills'
     | '/auth/callback'
+    | '/bwgs/new'
+    | '/routes/$routeId'
+    | '/routes/new'
+    | '/routes/$routeId/edit'
   id:
     | '__root__'
     | '/'
@@ -207,11 +277,17 @@ export interface FileRouteTypes {
     | '/_authenticated/reports'
     | '/_authenticated/routes'
     | '/_authenticated/scanner'
+    | '/_authenticated/schedule-trips'
     | '/_authenticated/settings'
+    | '/_authenticated/trips-history'
     | '/_authenticated/vehicles'
     | '/_authenticated/waste-types'
     | '/_authenticated/waybills'
     | '/auth/callback'
+    | '/_authenticated/bwgs_/new'
+    | '/_authenticated/routes_/$routeId'
+    | '/_authenticated/routes_/new'
+    | '/_authenticated/routes_/$routeId/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -299,11 +375,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedScannerRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/schedule-trips': {
+      id: '/_authenticated/schedule-trips'
+      path: '/schedule-trips'
+      fullPath: '/schedule-trips'
+      preLoaderRoute: typeof AuthenticatedScheduleTripsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/trips-history': {
+      id: '/_authenticated/trips-history'
+      path: '/trips-history'
+      fullPath: '/trips-history'
+      preLoaderRoute: typeof AuthenticatedTripsHistoryRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/vehicles': {
@@ -334,8 +424,50 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_authenticated/bwgs_/new': {
+      id: '/_authenticated/bwgs_/new'
+      path: '/bwgs/new'
+      fullPath: '/bwgs/new'
+      preLoaderRoute: typeof AuthenticatedBwgsNewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/routes_/$routeId': {
+      id: '/_authenticated/routes_/$routeId'
+      path: '/routes/$routeId'
+      fullPath: '/routes/$routeId'
+      preLoaderRoute: typeof AuthenticatedRoutesRouteIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/routes_/new': {
+      id: '/_authenticated/routes_/new'
+      path: '/routes/new'
+      fullPath: '/routes/new'
+      preLoaderRoute: typeof AuthenticatedRoutesNewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/routes_/$routeId/edit': {
+      id: '/_authenticated/routes_/$routeId/edit'
+      path: '/edit'
+      fullPath: '/routes/$routeId/edit'
+      preLoaderRoute: typeof AuthenticatedRoutesRouteIdEditRouteImport
+      parentRoute: typeof AuthenticatedRoutesRouteIdRoute
+    }
   }
 }
+
+interface AuthenticatedRoutesRouteIdRouteChildren {
+  AuthenticatedRoutesRouteIdEditRoute: typeof AuthenticatedRoutesRouteIdEditRoute
+}
+
+const AuthenticatedRoutesRouteIdRouteChildren: AuthenticatedRoutesRouteIdRouteChildren =
+  {
+    AuthenticatedRoutesRouteIdEditRoute: AuthenticatedRoutesRouteIdEditRoute,
+  }
+
+const AuthenticatedRoutesRouteIdRouteWithChildren =
+  AuthenticatedRoutesRouteIdRoute._addFileChildren(
+    AuthenticatedRoutesRouteIdRouteChildren,
+  )
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedBwgsRoute: typeof AuthenticatedBwgsRoute
@@ -346,10 +478,15 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
   AuthenticatedRoutesRoute: typeof AuthenticatedRoutesRoute
   AuthenticatedScannerRoute: typeof AuthenticatedScannerRoute
+  AuthenticatedScheduleTripsRoute: typeof AuthenticatedScheduleTripsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedTripsHistoryRoute: typeof AuthenticatedTripsHistoryRoute
   AuthenticatedVehiclesRoute: typeof AuthenticatedVehiclesRoute
   AuthenticatedWasteTypesRoute: typeof AuthenticatedWasteTypesRoute
   AuthenticatedWaybillsRoute: typeof AuthenticatedWaybillsRoute
+  AuthenticatedBwgsNewRoute: typeof AuthenticatedBwgsNewRoute
+  AuthenticatedRoutesRouteIdRoute: typeof AuthenticatedRoutesRouteIdRouteWithChildren
+  AuthenticatedRoutesNewRoute: typeof AuthenticatedRoutesNewRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -361,10 +498,15 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
   AuthenticatedRoutesRoute: AuthenticatedRoutesRoute,
   AuthenticatedScannerRoute: AuthenticatedScannerRoute,
+  AuthenticatedScheduleTripsRoute: AuthenticatedScheduleTripsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedTripsHistoryRoute: AuthenticatedTripsHistoryRoute,
   AuthenticatedVehiclesRoute: AuthenticatedVehiclesRoute,
   AuthenticatedWasteTypesRoute: AuthenticatedWasteTypesRoute,
   AuthenticatedWaybillsRoute: AuthenticatedWaybillsRoute,
+  AuthenticatedBwgsNewRoute: AuthenticatedBwgsNewRoute,
+  AuthenticatedRoutesRouteIdRoute: AuthenticatedRoutesRouteIdRouteWithChildren,
+  AuthenticatedRoutesNewRoute: AuthenticatedRoutesNewRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

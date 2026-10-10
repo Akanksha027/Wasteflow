@@ -30,9 +30,9 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/_authenticated/employees")({
   head: () => ({
     meta: [
-      { title: "Employees — WasteFlow ERP" },
+      { title: "Employees — AR ECOSYS" },
       { name: "description", content: "Staff master with roles, shifts, route and vehicle assignments." },
-      { property: "og:title", content: "Employees — WasteFlow ERP" },
+      { property: "og:title", content: "Employees — AR ECOSYS" },
       { property: "og:description", content: "Staff master with roles, shifts, route and vehicle assignments." },
     ],
   }),
@@ -226,8 +226,8 @@ function EmployeesPage() {
   return (
     <div>
       <PageHeader
-        title="Employees"
-        description="Supervisors, drivers and field workers with route and vehicle assignments."
+        title="Staff & Drivers"
+        description="Supervisors, drivers and field workers with route and vehicle assignments. Drivers use email/password in the mobile app."
         actions={
           <>
             <Button

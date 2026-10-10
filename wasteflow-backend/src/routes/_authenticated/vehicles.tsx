@@ -27,9 +27,9 @@ import { formatDate, kg, downloadCsv, daysAgoISO } from "@/lib/format";
 export const Route = createFileRoute("/_authenticated/vehicles")({
   head: () => ({
     meta: [
-      { title: "Vehicles — WasteFlow ERP" },
+      { title: "Vehicles — AR ECOSYS" },
       { name: "description", content: "Fleet master with capacity, compliance expiry, driver assignment and utilisation." },
-      { property: "og:title", content: "Vehicles — WasteFlow ERP" },
+      { property: "og:title", content: "Vehicles — AR ECOSYS" },
       { property: "og:description", content: "Fleet master with capacity, compliance expiry and utilisation." },
     ],
   }),

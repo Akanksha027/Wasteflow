@@ -10,12 +10,12 @@ import { Label } from "@/components/ui/label";
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
-      { title: "Sign in — WasteFlow ERP" },
+      { title: "Sign in — AR ECOSYS" },
       {
         name: "description",
-        content: "Sign in to WasteFlow ERP to manage municipal waste collection routes, vehicles and generators.",
+        content: "Sign in to AR ECOSYS to manage municipal waste collection routes, vehicles and generators.",
       },
-      { property: "og:title", content: "Sign in — WasteFlow ERP" },
+      { property: "og:title", content: "Sign in — AR ECOSYS" },
       { property: "og:description", content: "Secure access for admins, supervisors, drivers and field workers." },
     ],
   }),
@@ -58,7 +58,7 @@ function AuthPage() {
     if (error) {
       const msg = error.message.toLowerCase();
       if (msg.includes("email not confirmed")) {
-        toast.error("Confirm your email first — check your inbox for the WasteFlow link.");
+        toast.error("Confirm your email first — check your inbox for the AR ECOSYS link.");
       } else {
         toast.error(error.message);
       }
@@ -121,7 +121,7 @@ function AuthPage() {
           <span className="grid size-9 place-items-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
             <Recycle className="size-5" />
           </span>
-          <span className="text-lg font-semibold">WasteFlow ERP</span>
+          <span className="text-lg font-semibold">AR ECOSYS</span>
         </div>
         <div className="max-w-md space-y-4">
           <h2 className="text-3xl font-semibold leading-tight">
@@ -144,11 +144,11 @@ function AuthPage() {
             <span className="grid size-9 place-items-center rounded-md bg-primary text-primary-foreground">
               <Recycle className="size-5" />
             </span>
-            <span className="text-lg font-semibold">WasteFlow ERP</span>
+            <span className="text-lg font-semibold">AR ECOSYS</span>
           </div>
           {recovering ? (
             <form onSubmit={updatePassword} className="space-y-4">
-              <p className="text-sm text-muted-foreground">Choose a new password for your WasteFlow account.</p>
+              <p className="text-sm text-muted-foreground">Choose a new password for your AR ECOSYS account.</p>
               <div className="space-y-2">
                 <Label htmlFor="new-password">New password</Label>
                 <Input

@@ -72,6 +72,7 @@ export async function createTrip(params: {
   route_id: string;
   vehicle_id?: string | null;
   driver_id?: string | null;
+  notes?: string | null;
 }) {
   const { data, error } = await supabase
     .from("collection_trips")
@@ -82,9 +83,112 @@ export async function createTrip(params: {
       driver_id: params.driver_id ?? null,
       status: "not_started",
       total_collected_kg: 0,
+      ...(params.notes ? { notes: params.notes } : {}),
     } as never)
     .select("id")
     .single();
   if (error) throw error;
   return data;
+}
+
+export type ScheduleMode = "once" | "daily" | "weekly";
+
+export type SchedulePlan = {
+  mode: ScheduleMode;
+  /** Primary / start date (ISO yyyy-mm-dd) */
+  startDate: string;
+  /** Inclusive end for daily/weekly ranges */
+  endDate?: string;
+  /** JS weekday 0=Sun … 6=Sat when mode=weekly */
+  weekdays?: number[];
+};
+
+/** Expand a schedule plan into concrete trip dates (sorted, unique). Cap at 90 days. */
+export function expandScheduleDates(plan: SchedulePlan): string[] {
+  const start = parseISODate(plan.startDate);
+  if (!start) return [];
+
+  if (plan.mode === "once") {
+    return [toISODate(start)];
+  }
+
+  const end = parseISODate(plan.endDate || plan.startDate) ?? start;
+  if (end < start) return [toISODate(start)];
+
+  const maxDays = 90;
+  const dates: string[] = [];
+  const cursor = new Date(start.getTime());
+  const weekdays = new Set(plan.weekdays?.length ? plan.weekdays : [0, 1, 2, 3, 4, 5, 6]);
+
+  while (cursor <= end && dates.length < maxDays) {
+    const dow = cursor.getDay();
+    if (plan.mode === "daily" || weekdays.has(dow)) {
+      dates.push(toISODate(cursor));
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
+
+function parseISODate(value: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function toISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export async function scheduleTrips(params: {
+  dates: string[];
+  route_id: string;
+  vehicle_id?: string | null;
+  driver_id?: string | null;
+  prepareBoard?: boolean;
+  notes?: string | null;
+}): Promise<{ created: number; skipped: number; boardStops: number }> {
+  let created = 0;
+  let skipped = 0;
+  let boardStops = 0;
+
+  for (const trip_date of params.dates) {
+    let existingQ = supabase
+      .from("collection_trips")
+      .select("id")
+      .eq("trip_date", trip_date)
+      .eq("route_id", params.route_id)
+      .neq("status", "cancelled")
+      .limit(1);
+
+    if (params.vehicle_id) {
+      existingQ = existingQ.eq("vehicle_id", params.vehicle_id);
+    } else {
+      existingQ = existingQ.is("vehicle_id", null);
+    }
+
+    const { data: found } = await existingQ.maybeSingle();
+    if (found?.id) {
+      skipped += 1;
+    } else {
+      await createTrip({
+        trip_date,
+        route_id: params.route_id,
+        vehicle_id: params.vehicle_id,
+        driver_id: params.driver_id,
+        notes: params.notes,
+      });
+      created += 1;
+    }
+
+    if (params.prepareBoard !== false) {
+      boardStops += await generateDailyBoard(trip_date, params.route_id);
+    }
+  }
+
+  return { created, skipped, boardStops };
 }

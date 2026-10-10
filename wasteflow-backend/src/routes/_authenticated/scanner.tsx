@@ -22,9 +22,9 @@ import { qk } from "@/lib/api";
 export const Route = createFileRoute("/_authenticated/scanner")({
   head: () => ({
     meta: [
-      { title: "QR Scanner — WasteFlow ERP" },
+      { title: "QR Scanner — AR ECOSYS" },
       { name: "description", content: "Scan generator QR codes to verify pickups with GPS and timestamps." },
-      { property: "og:title", content: "QR Scanner — WasteFlow ERP" },
+      { property: "og:title", content: "QR Scanner — AR ECOSYS" },
       { property: "og:description", content: "Scan generator QR codes to verify pickups with GPS and timestamps." },
     ],
   }),

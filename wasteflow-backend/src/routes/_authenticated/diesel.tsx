@@ -27,9 +27,9 @@ import { formatDate, currency, downloadCsv, daysAgoISO, todayISO } from "@/lib/f
 export const Route = createFileRoute("/_authenticated/diesel")({
   head: () => ({
     meta: [
-      { title: "Diesel Log — WasteFlow ERP" },
+      { title: "Diesel Log — AR ECOSYS" },
       { name: "description", content: "Fuel entries per vehicle with automatic amount and km/litre efficiency flags." },
-      { property: "og:title", content: "Diesel Log — WasteFlow ERP" },
+      { property: "og:title", content: "Diesel Log — AR ECOSYS" },
       { property: "og:description", content: "Fuel entries per vehicle with efficiency monitoring." },
     ],
   }),

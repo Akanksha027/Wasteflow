@@ -1,0 +1,44 @@
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
+/* Scoped Essence template tokens. They stay on this page so the admin theme is unchanged. */
+.essence {
+  --background: oklch(0.975 0.005 85);
+  --foreground: oklch(0.15 0.01 60);
+  --card: oklch(0.98 0.003 85);
+  --card-foreground: oklch(0.15 0.01 60);
+  --popover: oklch(0.98 0.003 85);
+  --popover-foreground: oklch(0.15 0.01 60);
+  --primary: oklch(0.18 0.01 60);
+  --primary-foreground: oklch(0.975 0.005 85);
+  --secondary: oklch(0.92 0.01 75);
+  --secondary-foreground: oklch(0.18 0.01 60);
+  --muted: oklch(0.94 0.008 80);
+  --muted-foreground: oklch(0.45 0.01 60);
+  --accent: oklch(0.55 0.12 45);
+  --accent-foreground: oklch(0.98 0.003 85);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.98 0.003 85);
+  --border: oklch(0.88 0.01 75);
+  --input: oklch(0.92 0.008 80);
+  --ring: oklch(0.55 0.12 45);
+  --radius: 0rem;
+  --font-sans: "DM Sans", system-ui, sans-serif;
+  --font-serif: "Cormorant Garamond", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+.essence .font-serif {
+  font-family: var(--font-serif);
+}
+
+.essence .font-mono {
+  font-family: var(--font-mono);
+}
+
+.essence .font-sans {
+  font-family: var(--font-sans);
+}

@@ -1,11 +1,19 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Archive } from "lucide-react";
+import { Plus, Pencil, Trash2, Archive, Printer, QrCode, Download, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, LoadingRows, EmptyState } from "@/components/common/PageHeader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import {
+  PrintableBwgQrSheet,
+  BwgQrLabelCard,
+  downloadQrPng,
+  type BwgQrLabel,
+} from "@/components/common/PrintableBwgQr";
+import { MapboxLocationPicker } from "@/components/common/MapboxLocationPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,18 +35,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
-import { useSaveRow, useDeleteRow, qk } from "@/lib/api";
+import { useDeleteRow, qk } from "@/lib/api";
 import { syncBwgRouteStop } from "@/lib/ops";
 import { kg, formatDate, downloadCsv } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/bwgs")({
   head: () => ({
     meta: [
-      { title: "Bulk Waste Generators — WasteFlow ERP" },
+      { title: "Bulk Waste Generators — AR ECOSYS" },
       { name: "description", content: "Master list of bulk waste generators with QR codes, routes and wards." },
-      { property: "og:title", content: "Bulk Waste Generators — WasteFlow ERP" },
+      { property: "og:title", content: "Bulk Waste Generators — AR ECOSYS" },
       { property: "og:description", content: "Master list of bulk waste generators with QR codes, routes and wards." },
     ],
   }),
@@ -92,6 +99,10 @@ function BwgPage() {
   const [form, setForm] = useState<Record<string, string>>(empty);
   const [wasteCodes, setWasteCodes] = useState<string[]>([]);
   const [confirm, setConfirm] = useState<any>(null);
+  const [printLabels, setPrintLabels] = useState<BwgQrLabel[] | null>(null);
+  const [createdLabel, setCreatedLabel] = useState<BwgQrLabel | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const routes = useQuery({
     queryKey: qk.routes,
@@ -120,7 +131,6 @@ function BwgPage() {
     },
   });
 
-  const save = useSaveRow("bwgs", [qk.bwgs]);
   const remove = useDeleteRow("bwgs", [qk.bwgs]);
 
   const filtered = useMemo(() => {
@@ -135,16 +145,9 @@ function BwgPage() {
     });
   }, [bwgs.data, routeFilter, search]);
 
-  const openNew = () => {
-    const next = String((bwgs.data?.length ?? 0) + 1).padStart(3, "0");
-    setEditing(null);
-    setWasteCodes([]);
-    setForm({ ...empty, bwg_code: `BWG-${next}`, qr_code: `WF-BWG-${next}` });
-    setOpen(true);
-  };
-
   const openEdit = (row: any) => {
     setEditing(row);
+    setFormError(null);
     setWasteCodes(Array.isArray(row.waste_type_codes) ? row.waste_type_codes : []);
     setForm({
       ...empty,
@@ -153,44 +156,124 @@ function BwgPage() {
     setOpen(true);
   };
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
+
+    const bwg_code = form["bwg_code"].trim();
+    const qr_code = form["qr_code"].trim();
+    const name = form["name"].trim();
+
+    if (!bwg_code) {
+      const msg = "BWG ID is required.";
+      setFormError(msg);
+      toast.error(msg);
+      return;
+    }
+    if (!qr_code) {
+      const msg = "QR code is required (printed on the sticker).";
+      setFormError(msg);
+      toast.error(msg);
+      return;
+    }
+    if (!name) {
+      const msg = "Establishment / dustbin name is required.";
+      setFormError(msg);
+      toast.error(msg);
+      return;
+    }
+
+    const latRaw = form["latitude"].trim();
+    const lngRaw = form["longitude"].trim();
+    const latitude = latRaw ? Number(latRaw) : null;
+    const longitude = lngRaw ? Number(lngRaw) : null;
+    if ((latRaw && !Number.isFinite(latitude)) || (lngRaw && !Number.isFinite(longitude))) {
+      const msg = "Location is invalid. Search the map again or drag the pin.";
+      setFormError(msg);
+      toast.error(msg);
+      return;
+    }
+
     const values = {
-      bwg_code: form["bwg_code"],
-      qr_code: form["qr_code"],
-      name: form["name"],
-      owner_name: form["owner_name"] || null,
-      category: form["category"],
-      phone: form["phone"] || null,
-      email: form["email"] || null,
-      address: form["address"] || null,
-      ward: form["ward"] || null,
-      latitude: form["latitude"] ? Number(form["latitude"]) : null,
-      longitude: form["longitude"] ? Number(form["longitude"]) : null,
+      bwg_code,
+      qr_code,
+      name,
+      owner_name: form["owner_name"].trim() || null,
+      category: form["category"] || "Other",
+      phone: form["phone"].trim() || null,
+      email: form["email"].trim() || null,
+      address: form["address"].trim() || null,
+      ward: form["ward"].trim() || null,
+      latitude,
+      longitude,
       daily_expected_kg: form["daily_expected_kg"] ? Number(form["daily_expected_kg"]) : 0,
-      frequency: form["frequency"],
-      route_id: form["route_id"] || null,
-      supervisor_id: form["supervisor_id"] || null,
-      status: form["status"],
+      frequency: form["frequency"] || "daily",
+      route_id: form["route_id"] && form["route_id"] !== "__none__" ? form["route_id"] : null,
+      supervisor_id:
+        form["supervisor_id"] && form["supervisor_id"] !== "__none__" ? form["supervisor_id"] : null,
+      status: form["status"] || "active",
       onboarding_date: form["onboarding_date"] || null,
-      notes: form["notes"] || null,
+      notes: form["notes"].trim() || null,
       waste_type_codes: wasteCodes,
     };
-    save.mutate(
-      { id: editing?.id, values },
-      {
-        onSuccess: async (id) => {
-          try {
-            await syncBwgRouteStop(id, values.route_id, editing?.route_id);
-          } catch (err: any) {
-            toast.error(err?.message ?? "Saved generator, but route stop sync failed.");
-          }
-          setOpen(false);
-          void qc.invalidateQueries({ queryKey: qk.bwgs });
-          void qc.invalidateQueries({ queryKey: ["route_stops"] });
-        },
-      },
-    );
+
+    if (Number.isNaN(values.daily_expected_kg) || values.daily_expected_kg < 0) {
+      const msg = "Daily expected kg must be a valid number.";
+      setFormError(msg);
+      toast.error(msg);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      let id = editing?.id as string | undefined;
+      if (id) {
+        const { error } = await supabase.from("bwgs").update(values as never).eq("id", id);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.from("bwgs").insert(values as never).select("id").single();
+        if (error) throw error;
+        id = data.id;
+      }
+
+      try {
+        await syncBwgRouteStop(id!, values.route_id, editing?.route_id);
+      } catch (err: any) {
+        toast.error(err?.message ?? "Saved dustbin, but linking to route failed.");
+      }
+
+      setOpen(false);
+      void qc.invalidateQueries({ queryKey: qk.bwgs });
+      void qc.invalidateQueries({ queryKey: ["route_stops"] });
+
+      if (!editing) {
+        const routeMeta = (routes.data ?? []).find((r) => r.id === values.route_id);
+        setCreatedLabel({
+          id: id!,
+          name: values.name,
+          bwg_code: values.bwg_code,
+          qr_code: values.qr_code,
+          ward: values.ward,
+          address: values.address,
+          routes: routeMeta ? { route_code: routeMeta.route_code } : null,
+        });
+        toast.success("Dustbin created — download or print the QR sticker");
+      } else {
+        toast.success("Dustbin updated");
+      }
+    } catch (err: any) {
+      const code = err?.code as string | undefined;
+      let msg = err?.message ?? "Could not save dustbin.";
+      if (code === "23505") {
+        msg = "A matching record already exists. Refresh and try again.";
+      } else if (code === "42501" || /permission|rls|policy/i.test(msg)) {
+        msg = "You don't have permission to save. Sign in as Admin or Supervisor.";
+      }
+      setFormError(msg);
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const archive = async (row: any) => {
@@ -215,10 +298,18 @@ function BwgPage() {
   return (
     <div>
       <PageHeader
-        title="Bulk Waste Generators"
-        description="Every generator carries a unique QR code used by field workers. Assigning a route also adds the ordered stop."
+        title="Dustbins & QR Labels"
+        description="Each dustbin/customer gets a unique QR sticker. Drivers scan it during collection. Assigning a route also adds it as a stop."
         actions={
           <>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={filtered.length === 0}
+              onClick={() => setPrintLabels(filtered as BwgQrLabel[])}
+            >
+              <Printer className="size-4" /> Print QR labels ({filtered.length})
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -241,8 +332,10 @@ function BwgPage() {
               Export CSV
             </Button>
             {isManager ? (
-              <Button size="sm" onClick={openNew}>
-                <Plus className="size-4" /> Add generator
+              <Button size="sm" asChild>
+                <Link to="/bwgs/new">
+                  <Plus className="size-4" /> Add dustbin
+                </Link>
               </Button>
             ) : null}
           </>
@@ -311,28 +404,37 @@ function BwgPage() {
                         <StatusBadge status={b.status} />
                       </TableCell>
                       <TableCell className="text-right">
-                        {isManager ? (
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" aria-label="Edit" onClick={() => openEdit(b)}>
-                              <Pencil className="size-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" aria-label="Archive" onClick={() => void archive(b)}>
-                              <Archive className="size-4" />
-                            </Button>
-                            {isAdmin ? (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                aria-label="Delete"
-                                onClick={() => setConfirm(b)}
-                              >
-                                <Trash2 className="size-4 text-destructive" />
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Print QR"
+                            title="Print QR label"
+                            onClick={() => setPrintLabels([b as BwgQrLabel])}
+                          >
+                            <QrCode className="size-4" />
+                          </Button>
+                          {isManager ? (
+                            <>
+                              <Button variant="ghost" size="icon" aria-label="Edit" onClick={() => openEdit(b)}>
+                                <Pencil className="size-4" />
                               </Button>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">View only</span>
-                        )}
+                              <Button variant="ghost" size="icon" aria-label="Archive" onClick={() => void archive(b)}>
+                                <Archive className="size-4" />
+                              </Button>
+                              {isAdmin ? (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label="Delete"
+                                  onClick={() => setConfirm(b)}
+                                >
+                                  <Trash2 className="size-4 text-destructive" />
+                                </Button>
+                              ) : null}
+                            </>
+                          ) : null}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -344,19 +446,38 @@ function BwgPage() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="max-h-[90vh] w-[min(100vw-1.5rem,42rem)] max-w-[42rem] overflow-x-hidden overflow-y-auto sm:max-w-[42rem]">
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit generator" : "Add generator"}</DialogTitle>
-            <DialogDescription>Master record used by the QR scanner and route boards.</DialogDescription>
+            <DialogTitle>{editing ? "Edit dustbin" : "Add dustbin"}</DialogTitle>
+            <DialogDescription>
+              QR code is printed as a sticker for the dustbin. Drivers scan it during collection.
+            </DialogDescription>
           </DialogHeader>
-          <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
-            {field("bwg_code", "BWG ID", { required: true })}
-            {field("qr_code", "QR code", { required: true })}
+          <form
+            noValidate
+            onSubmit={(e) => void submit(e)}
+            className="grid gap-4 sm:grid-cols-2"
+          >
+            {formError ? (
+              <div className="sm:col-span-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {formError}
+              </div>
+            ) : null}
+            <div className="space-y-1.5">
+              <Label>BWG ID</Label>
+              <Input value={form["bwg_code"] || "…"} readOnly disabled className="bg-muted font-mono" />
+              <p className="text-xs text-muted-foreground">Auto-assigned · locked (printed on sticker)</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>QR code</Label>
+              <Input value={form["qr_code"] || "…"} readOnly disabled className="bg-muted font-mono" />
+              <p className="text-xs text-muted-foreground">Auto-assigned · locked · what drivers scan</p>
+            </div>
             {field("name", "Establishment name", { required: true })}
             {field("owner_name", "Owner / contact")}
             <div className="space-y-1.5">
               <Label>Category</Label>
-              <Select value={form["category"] ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
+              <Select value={form["category"] || "Hotel"} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -370,38 +491,55 @@ function BwgPage() {
               </Select>
             </div>
             {field("phone", "Phone")}
-            {field("email", "Email", { type: "email" })}
+            {field("email", "Email")}
             {field("ward", "Ward")}
             <div className="sm:col-span-2">{field("address", "Address")}</div>
-            {field("latitude", "Latitude", { inputMode: "decimal" })}
-            {field("longitude", "Longitude", { inputMode: "decimal" })}
+            <div className="sm:col-span-2">
+              <MapboxLocationPicker
+                latitude={form["latitude"] ? Number(form["latitude"]) : null}
+                longitude={form["longitude"] ? Number(form["longitude"]) : null}
+                fillAddress
+                onChange={({ latitude, longitude, address }) =>
+                  setForm((f) => ({
+                    ...f,
+                    latitude: latitude != null ? String(latitude) : "",
+                    longitude: longitude != null ? String(longitude) : "",
+                    ...(address ? { address } : {}),
+                  }))
+                }
+              />
+            </div>
             {field("daily_expected_kg", "Daily expected waste (kg)", { type: "number", step: "0.01", min: "0" })}
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Waste types collected</Label>
               <div className="flex flex-wrap gap-2">
-                {(wasteTypes.data ?? []).map((wt: any) => {
-                  const on = wasteCodes.includes(wt.code);
-                  return (
-                    <Button
-                      key={wt.code}
-                      type="button"
-                      size="sm"
-                      variant={on ? "default" : "outline"}
-                      onClick={() =>
-                        setWasteCodes((codes) =>
-                          on ? codes.filter((c) => c !== wt.code) : [...codes, wt.code],
-                        )
-                      }
-                    >
-                      {wt.code} · {wt.name}
-                    </Button>
-                  );
-                })}
+                {(wasteTypes.data ?? []).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No waste categories yet — add them under Waste Categories.</p>
+                ) : (
+                  (wasteTypes.data ?? []).map((wt: any) => {
+                    const on = wasteCodes.includes(wt.code);
+                    return (
+                      <Button
+                        key={wt.code}
+                        type="button"
+                        size="sm"
+                        variant={on ? "default" : "outline"}
+                        onClick={() =>
+                          setWasteCodes((codes) =>
+                            on ? codes.filter((c) => c !== wt.code) : [...codes, wt.code],
+                          )
+                        }
+                      >
+                        {wt.code} · {wt.name}
+                      </Button>
+                    );
+                  })
+                )}
               </div>
             </div>
             <div className="space-y-1.5">
               <Label>Collection frequency</Label>
-              <Select value={form["frequency"] ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, frequency: v }))}>
+              <Select value={form["frequency"] || "daily"} onValueChange={(v) => setForm((f) => ({ ...f, frequency: v }))}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -416,14 +554,18 @@ function BwgPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Assigned route</Label>
-              <Select value={form["route_id"] ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, route_id: v }))}>
+              <Select
+                value={form["route_id"] || "__none__"}
+                onValueChange={(v) => setForm((f) => ({ ...f, route_id: v === "__none__" ? "" : v }))}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select route" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__none__">No route yet</SelectItem>
                   {(routes.data ?? []).map((r) => (
                     <SelectItem key={r.id} value={r.id}>
-                      {r.name}
+                      {r.route_code} · {r.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -431,11 +573,15 @@ function BwgPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Assigned supervisor</Label>
-              <Select value={form["supervisor_id"] ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, supervisor_id: v }))}>
+              <Select
+                value={form["supervisor_id"] || "__none__"}
+                onValueChange={(v) => setForm((f) => ({ ...f, supervisor_id: v === "__none__" ? "" : v }))}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select supervisor" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
                   {(supervisors.data ?? []).map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.full_name}
@@ -446,7 +592,7 @@ function BwgPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Status</Label>
-              <Select value={form["status"] ?? ""} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
+              <Select value={form["status"] || "active"} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -466,14 +612,110 @@ function BwgPage() {
               />
             </div>
             <DialogFooter className="sm:col-span-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              <Button type="button" variant="outline" disabled={saving} onClick={() => setOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={save.isPending}>
-                Save generator
+              <Button type="submit" disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" /> Saving…
+                  </>
+                ) : editing ? (
+                  "Update dustbin"
+                ) : (
+                  "Create dustbin & get QR"
+                )}
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!createdLabel} onOpenChange={(v) => !v && setCreatedLabel(null)}>
+        <DialogContent className="max-w-md overflow-x-hidden">
+          <DialogHeader>
+            <DialogTitle>Dustbin created</DialogTitle>
+            <DialogDescription>
+              Download or print this QR and stick it on the bin. Drivers will scan it during collection.
+            </DialogDescription>
+          </DialogHeader>
+          {createdLabel ? (
+            <div className="space-y-4">
+              <BwgQrLabelCard bwg={createdLabel} />
+              <DialogFooter className="flex-col gap-2 sm:flex-col">
+                <Button
+                  className="w-full"
+                  onClick={() =>
+                    void downloadQrPng(createdLabel.qr_code, createdLabel.qr_code).then(() =>
+                      toast.success("QR image downloaded"),
+                    )
+                  }
+                >
+                  <Download className="size-4" /> Download QR PNG
+                </Button>
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  onClick={() => {
+                    setPrintLabels([createdLabel]);
+                    setCreatedLabel(null);
+                    setTimeout(() => window.print(), 250);
+                  }}
+                >
+                  <Printer className="size-4" /> Print label
+                </Button>
+                <Button variant="ghost" className="w-full" onClick={() => setCreatedLabel(null)}>
+                  Done
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!printLabels} onOpenChange={(v) => !v && setPrintLabels(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader className="no-print">
+            <DialogTitle>Print dustbin QR labels</DialogTitle>
+            <DialogDescription>
+              Stick each label on the matching bin. The driver app scans the encoded text (e.g. WF-BWG-001).
+            </DialogDescription>
+          </DialogHeader>
+          {printLabels ? <PrintableBwgQrSheet bwgs={printLabels} /> : null}
+          <DialogFooter className="no-print gap-2">
+            <Button variant="outline" onClick={() => setPrintLabels(null)}>
+              Close
+            </Button>
+            {printLabels?.length === 1 ? (
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  void downloadQrPng(printLabels[0].qr_code, printLabels[0].qr_code).then(() =>
+                    toast.success("QR image downloaded"),
+                  )
+                }
+              >
+                <Download className="size-4" /> Download PNG
+              </Button>
+            ) : printLabels && printLabels.length > 1 ? (
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  void (async () => {
+                    for (const b of printLabels) {
+                      await downloadQrPng(b.qr_code, b.qr_code);
+                    }
+                    toast.success(`Downloaded ${printLabels.length} QR images`);
+                  })()
+                }
+              >
+                <Download className="size-4" /> Download all PNGs
+              </Button>
+            ) : null}
+            <Button onClick={() => window.print()}>
+              <Printer className="size-4" /> Print
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

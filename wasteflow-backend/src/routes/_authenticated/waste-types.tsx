@@ -27,9 +27,9 @@ import { kg, tonnes, downloadCsv, daysAgoISO, todayISO } from "@/lib/format";
 export const Route = createFileRoute("/_authenticated/waste-types")({
   head: () => ({
     meta: [
-      { title: "Waste Types & Quantities — WasteFlow ERP" },
+      { title: "Waste Types & Quantities — AR ECOSYS" },
       { name: "description", content: "Configurable waste streams with units and collected quantities in kg and tonnes." },
-      { property: "og:title", content: "Waste Types & Quantities — WasteFlow ERP" },
+      { property: "og:title", content: "Waste Types & Quantities — AR ECOSYS" },
       { property: "og:description", content: "Configurable waste streams with collected quantities." },
     ],
   }),
@@ -85,8 +85,8 @@ function WasteTypesPage() {
   return (
     <div>
       <PageHeader
-        title="Waste Types & Quantities"
-        description="Configurable waste streams. Quantities aggregate every collection item in the selected period."
+        title="Waste Categories"
+        description="Types of waste drivers record at each stop (e.g. Wet, Dry, Plastic). Quantities aggregate from collections."
         actions={
           <>
             <Button

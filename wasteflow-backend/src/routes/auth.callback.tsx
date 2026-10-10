@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth/callback")({
   head: () => ({
-    meta: [{ title: "Signing in — WasteFlow" }],
+    meta: [{ title: "Signing in — AR ECOSYS" }],
   }),
   component: AuthCallbackPage,
 });
@@ -20,14 +20,14 @@ function AuthCallbackPage() {
     const query = params.toString();
     const hashQuery = hashParams.toString();
     const suffix = [query, hashQuery].filter(Boolean).join("&");
-    const deepLink = `wasteflow://auth/callback${suffix ? `?${suffix}` : ""}`;
+    const deepLink = `AR ECOSYS://auth/callback${suffix ? `?${suffix}` : ""}`;
 
     // If opened from the Driver App in-app browser, try to hand off to the app.
     const isMobileHandoff =
       params.has("code") || hashParams.has("access_token") || params.get("source") === "driver";
 
     if (isMobileHandoff) {
-      setMessage("Returning to the WasteFlow Driver app…");
+      setMessage("Returning to the AR ECOSYS Driver app…");
       window.location.replace(deepLink);
       return;
     }
@@ -57,7 +57,7 @@ function AuthCallbackPage() {
         return;
       }
 
-      setMessage("Sign-in link opened in a browser. Open the WasteFlow Driver app and try again.");
+      setMessage("Sign-in link opened in a browser. Open the AR ECOSYS Driver app and try again.");
     })();
   }, []);
 
