@@ -77,13 +77,13 @@ export function HeroSection() {
       </div>
 
       {/* Content */}
-      <div className="relative z-20 w-full max-w-[1800px] mx-auto px-6 md:px-12 lg:px-20 pb-16 md:pb-24 lg:pb-32">
+      <div className="relative z-20 w-full max-w-[1800px] mx-auto px-4 sm:px-6 md:px-12 lg:px-20 pb-12 sm:pb-16 md:pb-24 lg:pb-32">
         <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-end">
           {/* Main Headline */}
           <div className="lg:col-span-8">
             <div className="overflow-hidden">
               <h1 
-                className="font-serif text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-light leading-[0.9] tracking-[-0.02em] text-foreground"
+                className="font-serif text-4xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-light leading-[0.95] sm:leading-[0.9] tracking-[-0.02em] text-foreground"
                 style={{
                   transform: isLoaded ? "translateY(0)" : "translateY(100%)",
                   opacity: isLoaded ? 1 : 0,
@@ -103,7 +103,7 @@ export function HeroSection() {
           {/* Supporting Text */}
           <div className="lg:col-span-4 lg:pb-4">
             <div 
-              className="space-y-6 rounded-sm bg-background/90 p-5 text-foreground"
+              className="space-y-4 rounded-sm bg-background/90 p-4 text-foreground sm:space-y-6 sm:p-5"
               style={{
                 transform: isLoaded ? "translateY(0)" : "translateY(40px)",
                 opacity: isLoaded ? 1 : 0,
@@ -117,7 +117,7 @@ export function HeroSection() {
                 <div className="w-12 h-px bg-foreground" />
                 <span className="text-xs font-semibold tracking-[0.3em] uppercase text-foreground">Waste operations</span>
               </div>
-              <p className="max-w-md text-base font-medium leading-relaxed text-foreground md:text-lg">
+              <p className="max-w-md text-sm font-medium leading-relaxed text-foreground sm:text-base md:text-lg">
                 AR ECOSYS tracks municipal and commercial collection: QR-verified pickups, live routes, vehicles, diesel logs and waybills.
               </p>
             </div>

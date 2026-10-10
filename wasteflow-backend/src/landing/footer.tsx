@@ -9,7 +9,7 @@ export function Footer() {
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-10">
           <div className="space-y-6 max-w-md">
             <a href="/" className="inline-block">
-              <span className="font-serif text-2xl md:text-3xl font-light tracking-[0.2em] text-foreground">
+              <span className="font-serif text-xl sm:text-2xl md:text-3xl font-light tracking-[0.12em] sm:tracking-[0.2em] text-foreground">
                 AR ECOSYS
               </span>
             </a>

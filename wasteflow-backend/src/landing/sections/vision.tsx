@@ -65,7 +65,7 @@ export function VisionSection() {
               {/* Large Statement */}
               <div className="overflow-hidden">
                 <h2 
-                  className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-light leading-[1.1] tracking-[-0.01em] text-foreground max-w-5xl text-pretty"
+                  className="font-serif text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-light leading-[1.15] tracking-[-0.01em] text-foreground max-w-5xl text-pretty"
                   style={{
                     opacity: isVisible ? 1 : 0,
                     transform: isVisible ? "translateY(0)" : "translateY(60px)",
@@ -129,7 +129,7 @@ export function VisionSection() {
                   { value: "QR", label: "Verified pickups" },
                   { value: "GPS", label: "Timestamped stops" },
                   { value: "Live", label: "Route boards" },
-                  { value: "4", label: "Staff roles" },
+                  { value: "Wt", label: "Weights on record" },
                 ].map((stat, index) => (
                   <div key={stat.label} className="my-0 space-x-0 leading-5">
                     <span className="text-4xl md:text-5xl font-light text-foreground font-sans lg:text-8xl">
