@@ -81,20 +81,6 @@ export function HeroSection() {
         <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-end">
           {/* Main Headline */}
           <div className="lg:col-span-8">
-            <div
-              className="mb-6 flex flex-wrap items-center gap-3 text-sm font-semibold tracking-[0.22em] uppercase text-[#e85d04]"
-              style={{
-                opacity: isLoaded ? 1 : 0,
-                transform: isLoaded ? "translateY(0)" : "translateY(16px)",
-                transition: "all 0.8s cubic-bezier(0.16, 1, 0.3, 1)",
-              }}
-            >
-              <span>Collection</span>
-              <span className="h-px w-8 bg-[#e85d04]" />
-              <span>Sorting</span>
-              <span className="h-px w-8 bg-[#e85d04]" />
-              <span>Proof</span>
-            </div>
             <div className="overflow-hidden">
               <h1 
                 className="font-serif text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-light leading-[0.9] tracking-[-0.02em] text-foreground"
